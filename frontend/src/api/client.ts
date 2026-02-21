@@ -243,19 +243,19 @@ export const authApi = {
 // ─────────────────────────────────────────────────────────────
 
 export const textsApi = {
-  fromText: (text: string) =>
+  uploadText: (payload: { text: string }) =>
     apiFetch<Document>("/texts/from-text", {
       method: "POST",
-      body: JSON.stringify({ text }),
+      body: JSON.stringify(payload),
     }),
 
-  fromUrl: (url: string) =>
+  uploadUrl: (payload: { url: string }) =>
     apiFetch<Document>("/texts/from-url", {
       method: "POST",
-      body: JSON.stringify({ url }),
+      body: JSON.stringify(payload),
     }),
 
-  fromFile: (file: File) => {
+  uploadFile: (file: File) => {
     const fd = new FormData();
     fd.append("file", file);
     return apiUpload<Document>("/texts/from-file", fd);
@@ -274,13 +274,20 @@ export const textsApi = {
 // ─────────────────────────────────────────────────────────────
 
 export const analysisApi = {
-  analyze: (documentId: string, mode: "reader" | "writer", paragraphs: Paragraph[]) =>
+  analyze: (payload: {
+    document_id: string;
+    mode: "reader" | "writer";
+    paragraphs: { id: string; text: string }[];
+  }) =>
     apiFetch<AnalysisResult>("/analysis/analyze", {
       method: "POST",
-      body: JSON.stringify({ document_id: documentId, mode, paragraphs }),
+      body: JSON.stringify(payload),
     }),
 
   get: (analysisId: number) => apiFetch<AnalysisResult>(`/analysis/${analysisId}`),
+
+  history: (limit = 20, offset = 0) =>
+    apiFetch<AnalysisResult[]>(`/analysis/history?limit=${limit}&offset=${offset}`),
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -302,6 +309,9 @@ export const rewriteApi = {
     }),
 
   get: (rewriteId: number) => apiFetch<RewriteResult>(`/rewrite/${rewriteId}`),
+
+  history: (limit = 20, offset = 0) =>
+    apiFetch<RewriteResult[]>(`/rewrite/history?limit=${limit}&offset=${offset}`),
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -309,14 +319,14 @@ export const rewriteApi = {
 // ─────────────────────────────────────────────────────────────
 
 export const chatApi = {
-  ask: (documentId: string, question: string, sessionId: number | null = null) =>
+  chat: (payload: {
+    document_id: string;
+    user_question: string;
+    session_id: number | null;
+  }) =>
     apiFetch<ChatResponse>("/chat/", {
       method: "POST",
-      body: JSON.stringify({
-        document_id: documentId,
-        user_question: question,
-        session_id: sessionId,
-      }),
+      body: JSON.stringify(payload),
     }),
 
   getSession: (sessionId: number) =>

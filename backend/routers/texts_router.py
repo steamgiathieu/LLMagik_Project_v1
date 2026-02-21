@@ -7,9 +7,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from auth import get_current_user
 import models
-import backend.models_text as models_text
-import schemas
-import backend.schemas_text as schemas_text
+import models_text
+import schemas_text
 from services.text_processor import process_input
 
 router = APIRouter(prefix="/texts", tags=["Text Input"])

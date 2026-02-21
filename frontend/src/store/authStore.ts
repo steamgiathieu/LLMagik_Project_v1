@@ -73,7 +73,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  updateProfile: async (data) => {
+  updateProfile: async (data: any) => {
     set({ isLoading: true, error: null });
     try {
       const updated = await authApi.updateProfile(data);

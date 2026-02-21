@@ -4,6 +4,7 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: process.env.VITE_BASE_URL || "/LLMagik/", // GitHub Pages base URL
   plugins: [react()],
   resolve: {
     alias: {
@@ -16,5 +17,10 @@ export default defineConfig({
       // Optional: proxy API calls during development
       // "/api": "http://localhost:8000",
     },
+  },
+  build: {
+    outDir: "dist",
+    sourcemap: false,
+    minify: "terser",
   },
 });

@@ -77,7 +77,7 @@ export default function Reader() {
         <div className="reader-content">
           <ReaderView
             paragraphs={currentDocument.paragraphs}
-            title={currentDocument.title}
+            title={currentDocument.title || undefined}
             selectedId={selectedParagraphId}
             onSelectParagraph={setSelectedParagraph}
           />
