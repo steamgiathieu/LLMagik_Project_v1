@@ -37,6 +37,11 @@ export default function Profile() {
     }
   };
 
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
+  };
+
   return (
     <div className="profile-page">
       <header className="profile-header">
@@ -44,7 +49,7 @@ export default function Profile() {
           ← Trang chủ
         </button>
         <h1>Hồ sơ người dùng</h1>
-        <button onClick={logout} className="btn-logout">
+        <button onClick={handleLogout} className="btn-logout">
           Đăng xuất
         </button>
       </header>

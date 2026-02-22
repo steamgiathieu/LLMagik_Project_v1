@@ -7,6 +7,11 @@ export default function Navbar() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
 
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
+  };
+
   return (
     <nav className="navbar">
       <div className="navbar-brand">
@@ -32,7 +37,7 @@ export default function Navbar() {
               >
                 📊 Lịch sử
               </button>
-              <button onClick={() => logout()} className="nav-link logout">
+              <button onClick={handleLogout} className="nav-link logout">
                 Đăng xuất
               </button>
             </>

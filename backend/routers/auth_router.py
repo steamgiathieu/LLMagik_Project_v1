@@ -7,7 +7,7 @@ Authentication endpoints:
   - GET /auth/me        — Lấy thông tin user hiện tại
   - PUT /auth/profile   — Cập nhật profile của user
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, EmailStr
 from datetime import timedelta
@@ -99,12 +99,13 @@ class UpdateProfileRequest(BaseModel):
 def register(
     payload: RegisterRequest,
     db: Session = Depends(get_db),
+    response: Response = None,
 ):
     """
     Đăng ký người dùng mới.
     
     Kiểm tra xem username và email có tồn tại chưa.
-    Nếu không, tạo user mới và trả về JWT token.
+    Nếu không, tạo user mới và trả về JWT token trong cookie.
     """
     # Check if username/email already exists
     existing_username = db.query(models.User).filter(
@@ -152,6 +153,18 @@ def register(
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 
+    # Set HTTP-only secure cookie
+    if response:
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
+            httponly=True,
+            secure=os.getenv("ENVIRONMENT", "development") == "production",  # Only HTTPS in production
+            samesite="lax",
+            path="/",
+        )
+
     return TokenResponse(
         access_token=access_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
@@ -166,11 +179,12 @@ def register(
 def login(
     payload: LoginRequest,
     db: Session = Depends(get_db),
+    response: Response = None,
 ):
     """
     Đăng nhập với username và password.
     
-    Trả về JWT access_token nếu thành công.
+    Trả về JWT access_token trong cookie nếu thành công.
     """
     user = db.query(models.User).filter(
         models.User.username == payload.username
@@ -186,6 +200,18 @@ def login(
         data={"sub": user.username},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
+
+    # Set HTTP-only secure cookie
+    if response:
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
+            httponly=True,
+            secure=os.getenv("ENVIRONMENT", "development") == "production",  # Only HTTPS in production
+            samesite="lax",
+            path="/",
+        )
 
     return TokenResponse(
         access_token=access_token,
@@ -284,3 +310,21 @@ def update_profile(
         age_group=profile.age_group,
         created_at=current_user.created_at.isoformat(),
     )
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_200_OK,
+    summary="Đăng xuất",
+)
+def logout(response: Response = None):
+    """
+    Đăng xuất người dùng bằng cách xóa cookie.
+    """
+    if response:
+        response.delete_cookie(
+            key="access_token",
+            path="/",
+        )
+    
+    return {"message": "Đã đăng xuất thành công"}

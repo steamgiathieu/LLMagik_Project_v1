@@ -27,6 +27,11 @@ export default function Home() {
     }
   };
 
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
+  };
+
   return (
     <div className="home-page">
       <header className="home-header">
@@ -36,7 +41,7 @@ export default function Home() {
           <button onClick={() => navigate("/history")} className="btn-secondary">
             Lịch sử
           </button>
-          <button onClick={logout} className="btn-secondary">
+          <button onClick={handleLogout} className="btn-secondary">
             Đăng xuất
           </button>
         </div>

@@ -11,7 +11,7 @@ interface AuthState {
   // Actions
   login: (username: string, password: string) => Promise<void>;
   register: (data: { username: string; email: string; password: string; nickname: string }) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   fetchMe: () => Promise<void>;
   updateProfile: (data: { language?: string; role?: string; age_group?: string }) => Promise<void>;
   clearError: () => void;
@@ -27,7 +27,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await authApi.login(username, password);
-      tokenHelper.save(res.access_token);
+      // Token is now stored in HTTP-only cookies by the backend
+      tokenHelper.save();  // No-op, but keep for compatibility
       set({ user: res.user, isLoading: false });
       // Fetch full profile after login
       const me = await authApi.me();
@@ -42,7 +43,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await authApi.register(data);
-      tokenHelper.save(res.access_token);
+      // Token is now stored in HTTP-only cookies by the backend
+      tokenHelper.save();  // No-op, but keep for compatibility
       set({ user: res.user, isLoading: false });
       // Fetch profile
       const me = await authApi.me();
@@ -53,13 +55,19 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  logout: () => {
-    tokenHelper.clear();
-    set({ user: null, profile: null, error: null });
+  logout: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      // Call backend logout endpoint to clear cookies
+      await tokenHelper.clear();
+      set({ user: null, profile: null, error: null, isLoading: false });
+    } catch (err: any) {
+      // Still clear local state even if logout call fails
+      set({ user: null, profile: null, error: null, isLoading: false });
+    }
   },
 
   fetchMe: async () => {
-    if (!tokenHelper.exists()) return;
     set({ isLoading: true });
     try {
       const me = await authApi.me();
@@ -67,7 +75,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
       if (err.status === 401) {
-        tokenHelper.clear();
         set({ user: null, profile: null });
       }
     }

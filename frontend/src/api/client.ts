@@ -142,10 +142,6 @@ export interface HistoryStats {
 // Core fetch wrapper
 // ─────────────────────────────────────────────────────────────
 
-function getToken(): string | null {
-  return localStorage.getItem("access_token");
-}
-
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -157,20 +153,18 @@ export class ApiError extends Error {
 }
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
-
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
+    credentials: "include",  // Send cookies with every request
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
   });
 
   if (res.status === 401) {
-    localStorage.removeItem("access_token");
-    window.dispatchEvent(new Event("auth:logout"));   // components listen to this
+    // Clear auth state on unauthorized
+    window.dispatchEvent(new Event("auth:logout"));
     throw new ApiError(401, "Phiên đăng nhập hết hạn");
   }
 
@@ -184,17 +178,14 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 }
 
 async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
-  const token = getToken();
-
   const res = await fetch(`${BASE_URL}${path}`, {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "include",  // Send cookies with upload
     body: formData,
     // NOTE: không set Content-Type — browser tự set multipart/form-data + boundary
   });
 
   if (res.status === 401) {
-    localStorage.removeItem("access_token");
     window.dispatchEvent(new Event("auth:logout"));
     throw new ApiError(401, "Phiên đăng nhập hết hạn");
   }
@@ -370,12 +361,27 @@ export const historyApi = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Token helpers (dùng trong App.tsx / AuthProvider)
+// Token helpers (sử dụng cookies - HTTP-only, không cần localStorage)
 // ─────────────────────────────────────────────────────────────
 
 export const tokenHelper = {
-  save: (token: string) => localStorage.setItem("access_token", token),
-  clear: () => localStorage.removeItem("access_token"),
-  get: getToken,
-  exists: () => !!getToken(),
+  save: () => {
+    // Tokens are now stored in HTTP-only cookies by backend
+    // No need to do anything here
+  },
+  clear: () => {
+    // Call logout endpoint to clear cookies
+    return apiFetch<void>("/auth/logout", { method: "POST" }).catch(() => {
+      // Ignore errors on logout
+    });
+  },
+  get: () => {
+    // Can't access HTTP-only cookies from JavaScript
+    return null;
+  },
+  exists: () => {
+    // Check by attempting to fetch /auth/me
+    // This is handled by the authStore
+    return false;
+  },
 };
