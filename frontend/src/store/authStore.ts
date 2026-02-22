@@ -27,13 +27,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await authApi.login(username, password);
-      // Token is now stored in HTTP-only cookies by the backend
-      tokenHelper.save();  // No-op, but keep for compatibility
+      console.log("Login response:", res);
+      
+      // Save token to localStorage
+      tokenHelper.save(res.access_token);
+      console.log("Token saved, current token:", tokenHelper.get());
+      
+      // Set user from login response
       set({ user: res.user, isLoading: false });
-      // Fetch full profile after login
-      const me = await authApi.me();
-      set({ profile: me.profile });
+      
+      // Don't fetch profile - just use what server returned
     } catch (err: any) {
+      console.error("Login error:", err);
       set({ error: err.message, isLoading: false });
       throw err;
     }
@@ -43,13 +48,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await authApi.register(data);
-      // Token is now stored in HTTP-only cookies by the backend
-      tokenHelper.save();  // No-op, but keep for compatibility
+      console.log("Register response:", res);
+      
+      // Save token to localStorage
+      tokenHelper.save(res.access_token);
+      console.log("Token saved, current token:", tokenHelper.get());
+      
+      // Set user from register response
       set({ user: res.user, isLoading: false });
-      // Fetch profile
-      const me = await authApi.me();
-      set({ profile: me.profile });
+      
+      // Don't fetch profile - just use what server returned
     } catch (err: any) {
+      console.error("Register error:", err);
       set({ error: err.message, isLoading: false });
       throw err;
     }

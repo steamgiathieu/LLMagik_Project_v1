@@ -152,18 +152,60 @@ export class ApiError extends Error {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Token Storage (localStorage) - define early for apiFetch
+// ─────────────────────────────────────────────────────────────
+
+const TOKEN_KEY = "access_token";
+
+export const tokenHelper = {
+  save: (token: string) => {
+    localStorage.setItem(TOKEN_KEY, token);
+  },
+  clear: () => {
+    localStorage.removeItem(TOKEN_KEY);
+    // Call logout endpoint to clear backend cookies
+    return apiFetch<void>("/auth/logout", { method: "POST" }).catch(() => {
+      // Ignore errors on logout
+    });
+  },
+  get: () => {
+    return localStorage.getItem(TOKEN_KEY);
+  },
+  exists: () => {
+    return !!localStorage.getItem(TOKEN_KEY);
+  },
+};
+
+// ─────────────────────────────────────────────────────────────
+
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = tokenHelper.get();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+    ...options.headers,
+  };
+
+  // Add Authorization header if token exists
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+    console.log(`[apiFetch] Sending request to ${path} with token`);
+  } else {
+    console.log(`[apiFetch] Sending request to ${path} WITHOUT token`);
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
-    credentials: "include",  // Send cookies with every request
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
+    credentials: "include",  // Still send cookies if they exist
+    headers,
   });
 
+  console.log(`[apiFetch] Response status: ${res.status} from ${path}`);
+
   if (res.status === 401) {
+    console.log(`[apiFetch] Got 401, clearing token and dispatching logout`);
     // Clear auth state on unauthorized
+    tokenHelper.clear();
     window.dispatchEvent(new Event("auth:logout"));
     throw new ApiError(401, "Phiên đăng nhập hết hạn");
   }
@@ -178,14 +220,30 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 }
 
 async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const token = tokenHelper.get();
+  const headers: HeadersInit = {};
+
+  // Add Authorization header if token exists
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+    console.log(`[apiUpload] Sending request to ${path} with token`);
+  } else {
+    console.log(`[apiUpload] Sending request to ${path} WITHOUT token`);
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method: "POST",
     credentials: "include",  // Send cookies with upload
     body: formData,
+    headers,
     // NOTE: không set Content-Type — browser tự set multipart/form-data + boundary
   });
 
+  console.log(`[apiUpload] Response status: ${res.status} from ${path}`);
+
   if (res.status === 401) {
+    console.log(`[apiUpload] Got 401, clearing token and dispatching logout`);
+    tokenHelper.clear();
     window.dispatchEvent(new Event("auth:logout"));
     throw new ApiError(401, "Phiên đăng nhập hết hạn");
   }
@@ -218,6 +276,11 @@ export const authApi = {
     apiFetch<AuthResponse>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ username, password }),
+    }),
+
+  refresh: () =>
+    apiFetch<AuthResponse>("/auth/refresh", {
+      method: "POST",
     }),
 
   me: () => apiFetch<UserWithProfile>("/auth/me"),
@@ -360,28 +423,3 @@ export const historyApi = {
   stats: () => apiFetch<HistoryStats>("/history/stats"),
 };
 
-// ─────────────────────────────────────────────────────────────
-// Token helpers (sử dụng cookies - HTTP-only, không cần localStorage)
-// ─────────────────────────────────────────────────────────────
-
-export const tokenHelper = {
-  save: () => {
-    // Tokens are now stored in HTTP-only cookies by backend
-    // No need to do anything here
-  },
-  clear: () => {
-    // Call logout endpoint to clear cookies
-    return apiFetch<void>("/auth/logout", { method: "POST" }).catch(() => {
-      // Ignore errors on logout
-    });
-  },
-  get: () => {
-    // Can't access HTTP-only cookies from JavaScript
-    return null;
-  },
-  exists: () => {
-    // Check by attempting to fetch /auth/me
-    // This is handled by the authStore
-    return false;
-  },
-};

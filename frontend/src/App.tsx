@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
+import { authApi, tokenHelper } from "@/api/client";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Reader from "./pages/Reader";
@@ -12,12 +13,40 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { fetchMe, user } = useAuthStore();
+  const { fetchMe, user, logout } = useAuthStore();
+  const initRef = useRef(false);
 
   useEffect(() => {
-    // Restore session on app load
-    fetchMe();
-  }, [fetchMe]);
+    // Restore session on app load (only once)
+    if (!initRef.current) {
+      initRef.current = true;
+      // Only fetch user if token exists (user previously logged in)
+      if (tokenHelper.exists()) {
+        fetchMe();
+      }
+    }
+  }, []); // Empty dependency - run only once on mount
+
+  useEffect(() => {
+    // Auto-refresh token every 25 minutes (token expires in 30 minutes)
+    if (!user) return;
+
+    const refreshInterval = setInterval(async () => {
+      try {
+        const res = await authApi.refresh();
+        // Update token in localStorage
+        tokenHelper.save(res.access_token);
+        console.log("Token refreshed successfully");
+      } catch (error) {
+        console.error("Token refresh failed:", error);
+        // Token refresh failed - logout user
+        await logout();
+        window.location.href = "/login";
+      }
+    }, 25 * 60 * 1000); // 25 minutes
+
+    return () => clearInterval(refreshInterval);
+  }, [user, logout]);
 
   useEffect(() => {
     // Listen for logout events (401 from API)

@@ -15,7 +15,7 @@ load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key-change-me")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10080"))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))  # 30 minutes
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
@@ -48,11 +48,11 @@ def decode_token(token: str) -> dict:
 
 
 def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
-    request: Request = None,
     db: Session = Depends(get_db),
 ) -> models.User:
-    # Try to get token from Authorization header first, then from cookie
+    # Try to get token from Authorization header first (oauth2_scheme), then from cookie
     if not token and request:
         token = request.cookies.get("access_token")
     

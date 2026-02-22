@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: process.env.VITE_BASE_URL || "/LLMagik/", // GitHub Pages base URL
+  base: process.env.VITE_BASE_URL || "/", // Use "/" for local dev, "/LLMagik/" for GitHub Pages
   plugins: [react()],
   resolve: {
     alias: {

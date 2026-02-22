@@ -10,6 +10,7 @@ Authentication endpoints:
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, EmailStr
+from typing import Optional
 from datetime import timedelta
 import os
 
@@ -49,6 +50,7 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+    user: Optional[UserResponse] = None
 
 
 class UserResponse(BaseModel):
@@ -62,6 +64,17 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    @classmethod
+    def from_orm(cls, obj):
+        data = {
+            "id": obj.id,
+            "username": obj.username,
+            "email": obj.email,
+            "nickname": obj.nickname,
+            "created_at": obj.created_at.isoformat() if hasattr(obj.created_at, 'isoformat') else str(obj.created_at),
+        }
+        return cls(**data)
+
 
 class UserProfileResponse(BaseModel):
     """Thông tin profile user."""
@@ -74,6 +87,19 @@ class UserProfileResponse(BaseModel):
     age_group: str
     created_at: str
 
+    class Config:
+        from_attributes = True
+
+
+class UserWithProfileResponse(BaseModel):
+    """User đầy đủ thông tin với profile."""
+    id: int
+    username: str
+    email: str
+    nickname: str
+    created_at: str
+    profile: UserProfileResponse  # Nested profile
+    
     class Config:
         from_attributes = True
 
@@ -98,8 +124,8 @@ class UpdateProfileRequest(BaseModel):
 )
 def register(
     payload: RegisterRequest,
+    response: Response,
     db: Session = Depends(get_db),
-    response: Response = None,
 ):
     """
     Đăng ký người dùng mới.
@@ -168,6 +194,7 @@ def register(
     return TokenResponse(
         access_token=access_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=UserResponse.from_orm(user),
     )
 
 
@@ -178,8 +205,8 @@ def register(
 )
 def login(
     payload: LoginRequest,
+    response: Response,
     db: Session = Depends(get_db),
-    response: Response = None,
 ):
     """
     Đăng nhập với username và password.
@@ -216,12 +243,51 @@ def login(
     return TokenResponse(
         access_token=access_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=UserResponse.from_orm(user),
+    )
+
+
+@router.post(
+    "/refresh",
+    response_model=TokenResponse,
+    summary="Gia hạn token",
+)
+def refresh_token(
+    response: Response,
+    current_user: models.User = Depends(get_current_user),
+):
+    """
+    Gia hạn JWT token bằng cách tạo token mới.
+    
+    Yêu cầu xác thực (JWT token hiện tại).
+    """
+    access_token = create_access_token(
+        data={"sub": current_user.username},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+
+    # Update HTTP-only secure cookie
+    if response:
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
+            httponly=True,
+            secure=os.getenv("ENVIRONMENT", "development") == "production",
+            samesite="lax",
+            path="/",
+        )
+
+    return TokenResponse(
+        access_token=access_token,
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=UserResponse.from_orm(current_user),
     )
 
 
 @router.get(
     "/me",
-    response_model=UserProfileResponse,
+    response_model=UserWithProfileResponse,
     summary="Lấy thông tin user hiện tại",
 )
 def get_me(
@@ -248,15 +314,25 @@ def get_me(
         db.add(profile)
         db.commit()
 
-    return UserProfileResponse(
-        id=current_user.id,
+    # Build nested response with profile field
+    profile_data = UserProfileResponse(
+        id=profile.user_id,
         username=current_user.username,
         email=current_user.email,
         nickname=current_user.nickname,
         language=profile.language,
         role=profile.role,
         age_group=profile.age_group,
-        created_at=current_user.created_at.isoformat(),
+        created_at=current_user.created_at.isoformat() if hasattr(current_user.created_at, 'isoformat') else str(current_user.created_at),
+    )
+    
+    return UserWithProfileResponse(
+        id=current_user.id,
+        username=current_user.username,
+        email=current_user.email,
+        nickname=current_user.nickname,
+        created_at=current_user.created_at.isoformat() if hasattr(current_user.created_at, 'isoformat') else str(current_user.created_at),
+        profile=profile_data,
     )
 
 
@@ -317,7 +393,7 @@ def update_profile(
     status_code=status.HTTP_200_OK,
     summary="Đăng xuất",
 )
-def logout(response: Response = None):
+def logout(response: Response):
     """
     Đăng xuất người dùng bằng cách xóa cookie.
     """
