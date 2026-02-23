@@ -40,7 +40,7 @@ export default function Login() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <h1 className="login-title">TextAnalyzer</h1>
+        <h1 className="login-title">InfoLen AI</h1>
         <p className="login-subtitle">Phân tích văn bản thông minh với AI</p>
 
         <div className="login-tabs">

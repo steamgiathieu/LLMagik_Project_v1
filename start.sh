@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Quick Start Script for TextAnalyzer
+# Quick Start Script for InfoLen AI
 # Chạy cả backend và frontend cùng lúc
 
 set -e
 
-echo "🚀 Starting TextAnalyzer Development Environment..."
+echo "🚀 Starting InfoLen AI Development Environment..."
 echo ""
 
 # Colors

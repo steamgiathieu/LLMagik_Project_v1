@@ -35,7 +35,7 @@ export default function Home() {
   return (
     <div className="home-page">
       <header className="home-header">
-        <h1>TextAnalyzer</h1>
+        <h1>InfoLen AI</h1>
         <div className="home-header-right">
           <span className="user-badge">{user?.nickname}</span>
           <button onClick={() => navigate("/history")} className="btn-secondary">

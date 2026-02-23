@@ -16,7 +16,7 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="navbar-brand">
         <h1 onClick={() => navigate("/")} className="brand-title">
-          TextAnalyzer
+          InfoLen AI
         </h1>
       </div>
 

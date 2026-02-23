@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="TextAnalyzer API",
+    title="InfoLen AI API",
     description="Backend cho ứng dụng đọc và phân tích văn bản AI",
     version="1.0.0",
     lifespan=lifespan,
@@ -51,7 +51,7 @@ app.include_router(history_router)
 
 @app.get("/", tags=["Health"])
 def root():
-    return {"status": "ok", "message": "TextAnalyzer API is running"}
+    return {"status": "ok", "message": "InfoLen AI API is running"}
 
 
 @app.get("/health", tags=["Health"])
