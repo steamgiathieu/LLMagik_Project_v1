@@ -45,14 +45,6 @@ class LoginRequest(BaseModel):
     password: str = Field(..., examples=["securepass123"])
 
 
-class TokenResponse(BaseModel):
-    """Phản hồi token."""
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int
-    user: Optional[UserResponse] = None
-
-
 class UserResponse(BaseModel):
     """Thông tin user."""
     id: int
@@ -74,6 +66,14 @@ class UserResponse(BaseModel):
             "created_at": obj.created_at.isoformat() if hasattr(obj.created_at, 'isoformat') else str(obj.created_at),
         }
         return cls(**data)
+
+
+class TokenResponse(BaseModel):
+    """Phản hồi token."""
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: Optional[UserResponse] = None
 
 
 class UserProfileResponse(BaseModel):
