@@ -71,15 +71,19 @@ export default function Profile() {
             <h3>Cài đặt</h3>
 
             <div className="form-group">
-              <label htmlFor="language">Ngôn ngữ</label>
+              <label htmlFor="language">🌐 Ngôn ngữ nhận kết quả phân tích</label>
               <select
                 id="language"
                 value={formData.language}
                 onChange={(e) => setFormData({ ...formData, language: e.target.value })}
               >
-                <option value="vi">Tiếng Việt</option>
-                <option value="en">English</option>
+                <option value="vi">🇻🇳 Tiếng Việt</option>
+                <option value="en">🇬🇧 English</option>
+                <option value="zh">🇨🇳 中文 (Chinese)</option>
+                <option value="ja">🇯🇵 日本語 (Japanese)</option>
+                <option value="fr">🇫🇷 Français (French)</option>
               </select>
+              <p className="form-hint">AI sẽ trả lời phân tích, chat và viết lại bằng ngôn ngữ này</p>
             </div>
 
             <div className="form-group">

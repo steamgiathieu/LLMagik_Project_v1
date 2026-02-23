@@ -15,6 +15,7 @@ export default function Navbar() {
   return (
     <nav className="navbar">
       <div className="navbar-brand">
+        <div className="brand-icon">✨</div>
         <h1 onClick={() => navigate("/")} className="brand-title">
           InfoLen AI
         </h1>

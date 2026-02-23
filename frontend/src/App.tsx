@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Reader from "./pages/Reader";
 import History from "./pages/History";
+import LanguageSwitcher from "./components/LanguageSwitcher";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuthStore();
@@ -68,6 +69,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Home />
+              <LanguageSwitcher />
             </ProtectedRoute>
           }
         />
@@ -76,6 +78,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Reader />
+              <LanguageSwitcher />
             </ProtectedRoute>
           }
         />
@@ -84,6 +87,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <History />
+              <LanguageSwitcher />
             </ProtectedRoute>
           }
         />

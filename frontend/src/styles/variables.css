@@ -4,29 +4,29 @@
 
 :root {
   /* ── Brand Colors ── */
-  --color-primary:        #667eea;
-  --color-primary-dark:   #5a6fd6;
-  --color-primary-light:  #8fa4f3;
-  --color-secondary:      #764ba2;
-  --color-secondary-dark: #5e3a82;
+  --color-primary:        #4f6ef7;
+  --color-primary-dark:   #3b5bdb;
+  --color-primary-light:  #748ffc;
+  --color-secondary:      #7048e8;
+  --color-secondary-dark: #5f3dc4;
 
   /* Gradient shortcuts */
-  --gradient-brand:       linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --gradient-brand-soft:  linear-gradient(135deg, rgba(102,126,234,.12) 0%, rgba(118,75,162,.12) 100%);
-  --gradient-hero:        linear-gradient(160deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+  --gradient-brand:       linear-gradient(135deg, #4f6ef7 0%, #7048e8 100%);
+  --gradient-brand-soft:  linear-gradient(135deg, rgba(79,110,247,.1) 0%, rgba(112,72,232,.1) 100%);
+  --gradient-hero:        linear-gradient(160deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
 
   /* ── Neutral Palette ── */
   --color-white:          #ffffff;
-  --color-gray-50:        #f9fafb;
-  --color-gray-100:       #f3f4f6;
-  --color-gray-200:       #e5e7eb;
-  --color-gray-300:       #d1d5db;
-  --color-gray-400:       #9ca3af;
-  --color-gray-500:       #6b7280;
-  --color-gray-600:       #4b5563;
-  --color-gray-700:       #374151;
-  --color-gray-800:       #1f2937;
-  --color-gray-900:       #111827;
+  --color-gray-50:        #f8f9fa;
+  --color-gray-100:       #f1f3f5;
+  --color-gray-200:       #e9ecef;
+  --color-gray-300:       #dee2e6;
+  --color-gray-400:       #6c757d;  /* Darker for better contrast on white */
+  --color-gray-500:       #495057;  /* Darker for better contrast on white */
+  --color-gray-600:       #343a40;
+  --color-gray-700:       #212529;
+  --color-gray-800:       #0d1117;
+  --color-gray-900:       #030712;
 
   /* ── Semantic Colors ── */
   --color-success:        #10b981;

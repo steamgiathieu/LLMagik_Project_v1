@@ -41,6 +41,12 @@ async def rewrite_paragraph(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    # Get user's language preference
+    user_profile = db.query(models.UserProfile).filter(
+        models.UserProfile.user_id == current_user.id
+    ).first()
+    user_language = user_profile.language if user_profile else "vi"
+
     provider = get_provider()
     t0 = time.monotonic()
     try:
@@ -48,6 +54,7 @@ async def rewrite_paragraph(
             paragraph_id=payload.paragraph_id,
             original_text=payload.original_text,
             goal=payload.goal,
+            language=user_language,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI service lỗi: {e}")

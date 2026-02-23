@@ -12,6 +12,7 @@ export interface User {
   username: string;
   email: string;
   nickname: string;
+  language: string;
   created_at: string;
 }
 
@@ -181,9 +182,9 @@ export const tokenHelper = {
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = tokenHelper.get();
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...options.headers,
+    ...(options.headers as Record<string, string> ?? {}),
   };
 
   // Add Authorization header if token exists
@@ -266,6 +267,7 @@ export const authApi = {
     email: string;
     password: string;
     nickname: string;
+    language?: string;
   }) =>
     apiFetch<AuthResponse>("/auth/register", {
       method: "POST",

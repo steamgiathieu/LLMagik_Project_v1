@@ -1,0 +1,120 @@
+/* ============================================================
+   InfoLen AI — Language Switcher (Fixed Bottom-Right)
+   ============================================================ */
+
+.language-switcher {
+  position: fixed;
+  bottom: var(--space-4);
+  right: var(--space-4);
+  z-index: 1000;
+}
+
+.language-switcher-button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-white);
+  border: 2px solid var(--color-gray-200);
+  border-radius: var(--radius-xl);
+  cursor: pointer;
+  transition: var(--transition-base);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-sans);
+}
+
+.language-switcher-button:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 8px 24px rgba(79, 110, 247, 0.3);
+  transform: translateY(-2px);
+}
+
+.language-flag {
+  font-size: 20px;
+}
+
+.language-code {
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--color-gray-800);
+}
+
+.language-dropdown {
+  position: absolute;
+  bottom: calc(100% + var(--space-3));
+  right: 0;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  padding: var(--space-2);
+  min-width: 200px;
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.language-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: var(--transition-base);
+  font-family: var(--font-sans);
+  text-align: left;
+}
+
+.language-option:hover {
+  background: var(--color-gray-50);
+}
+
+.language-option.active {
+  background: rgba(79, 110, 247, 0.1);
+}
+
+.language-option-flag {
+  font-size: 20px;
+}
+
+.language-option-name {
+  flex: 1;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-gray-800);
+}
+
+.language-option-check {
+  font-size: var(--text-sm);
+  color: var(--color-primary);
+  font-weight: var(--font-bold);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .language-switcher {
+    bottom: var(--space-3);
+    right: var(--space-3);
+  }
+
+  .language-switcher-button {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .language-dropdown {
+    min-width: 180px;
+  }
+}

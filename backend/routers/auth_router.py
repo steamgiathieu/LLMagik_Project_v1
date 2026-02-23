@@ -31,12 +31,16 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 # Schemas
 # ─────────────────────────────────────────────────────────────
 
+# Supported languages
+SUPPORTED_LANGUAGES = {"vi", "en", "zh", "ja", "fr"}
+
 class RegisterRequest(BaseModel):
     """Yêu cầu đăng ký."""
     username: str = Field(..., min_length=3, max_length=50, examples=["john_doe"])
     email: str = Field(..., examples=["john@example.com"])
     password: str = Field(..., min_length=6, examples=["securepass123"])
     nickname: str = Field(..., min_length=1, max_length=100, examples=["John"])
+    language: Optional[str] = Field("vi", min_length=2, max_length=5, examples=["vi"])
 
 
 class LoginRequest(BaseModel):
@@ -162,10 +166,13 @@ def register(
     db.add(user)
     db.flush()
 
+    # Validate language
+    lang = payload.language if payload.language in SUPPORTED_LANGUAGES else "vi"
+
     # Create user profile
     profile = models.UserProfile(
         user_id=user.id,
-        language="vi",
+        language=lang,
         role="reader",
         age_group="adult",
     )

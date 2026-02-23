@@ -26,34 +26,63 @@ load_dotenv()
 # Prompt builders
 # ─────────────────────────────────────────────────────────────
 
-READER_SYSTEM = """Bạn là chuyên gia phân tích văn bản từ góc độ người đọc.
-Nhiệm vụ: phân tích văn bản và trả về JSON theo đúng schema. Không thêm text ngoài JSON."""
+# Language name map for prompts
+LANGUAGE_NAMES = {
+    "vi": "Tiếng Việt (Vietnamese)",
+    "en": "English",
+    "zh": "中文 (Chinese)",
+    "ja": "日本語 (Japanese)",
+    "fr": "Français (French)",
+}
 
-WRITER_SYSTEM = """Bạn là biên tập viên chuyên nghiệp, phân tích văn bản từ góc độ người viết.
-Nhiệm vụ: đánh giá kỹ thuật viết và đề xuất cải thiện, trả về JSON theo đúng schema. Không thêm text ngoài JSON."""
+def _lang_instruction(language: str) -> str:
+    """Return a language instruction string for AI prompts."""
+    lang_name = LANGUAGE_NAMES.get(language, "Tiếng Việt (Vietnamese)")
+    return f"QUAN TRỌNG: Toàn bộ nội dung trong JSON (summary, main_idea, notes, v.v.) PHẢI được viết bằng {lang_name}."
 
-REWRITE_SYSTEM = """Bạn là biên tập viên chuyên nghiệp. Nhiệm vụ: viết lại MỘT đoạn văn theo mục tiêu cho trước.
-Trả về JSON hợp lệ, không có markdown, không có giải thích ngoài JSON."""
+
+def build_reader_system(language: str = "vi") -> str:
+    return f"""Bạn là chuyên gia phân tích văn bản từ góc độ người đọc.
+Nhiệm vụ: phân tích văn bản và trả về JSON theo đúng schema. Không thêm text ngoài JSON.
+{_lang_instruction(language)}"""
+
+def build_writer_system(language: str = "vi") -> str:
+    return f"""Bạn là biên tập viên chuyên nghiệp, phân tích văn bản từ góc độ người viết.
+Nhiệm vụ: đánh giá kỹ thuật viết và đề xuất cải thiện, trả về JSON theo đúng schema. Không thêm text ngoài JSON.
+{_lang_instruction(language)}"""
+
+def build_rewrite_system(language: str = "vi") -> str:
+    return f"""Bạn là biên tập viên chuyên nghiệp. Nhiệm vụ: viết lại MỘT đoạn văn theo mục tiêu cho trước.
+Trả về JSON hợp lệ, không có markdown, không có giải thích ngoài JSON.
+{_lang_instruction(language)}"""
+
+# Keep backward-compat constants
+READER_SYSTEM = build_reader_system("vi")
+WRITER_SYSTEM = build_writer_system("vi")
+REWRITE_SYSTEM = build_rewrite_system("vi")
 
 
-def build_analyze_prompt(mode: str, paragraphs: list[dict]) -> str:
+def build_analyze_prompt(mode: str, paragraphs: list[dict], language: str = "vi") -> str:
     numbered = "\n\n".join(f"[{p['id']}] {p['text']}" for p in paragraphs)
     schema = json.dumps(_analysis_schema(mode), ensure_ascii=False, indent=2)
+    lang_note = _lang_instruction(language)
     return f"""Phân tích văn bản sau theo chế độ "{mode}".
 
 === VĂN BẢN ===
 {numbered}
 
 === YÊU CẦU OUTPUT ===
+{lang_note}
 Trả về JSON hợp lệ theo schema (không markdown, không giải thích):
 {schema}"""
 
 
-def build_rewrite_prompt(paragraph_id: str, original_text: str, goal: str) -> str:
+def build_rewrite_prompt(paragraph_id: str, original_text: str, goal: str, language: str = "vi") -> str:
     schema = json.dumps({
-        "rewritten_text": "<đoạn văn đã viết lại>",
-        "explanation": "<giải thích ngắn các thay đổi và lý do>",
+        "rewritten_text": "<rewritten paragraph>",
+        "explanation": "<brief explanation of changes>",
     }, ensure_ascii=False, indent=2)
+    lang_note = _lang_instruction(language)
     return f"""Viết lại đoạn văn [{paragraph_id}] theo mục tiêu: "{goal}"
 
 === ĐOẠN VĂN GỐC ===
@@ -62,7 +91,7 @@ def build_rewrite_prompt(paragraph_id: str, original_text: str, goal: str) -> st
 === YÊU CẦU ===
 - Chỉ viết lại đoạn này, không thay đổi nội dung cốt lõi
 - Đạt mục tiêu: {goal}
-- Giữ nguyên ngôn ngữ của văn bản gốc
+- {lang_note}
 - Trả về JSON theo schema:
 {schema}"""
 
@@ -94,11 +123,11 @@ def _analysis_schema(mode: str) -> dict:
 
 class BaseAIProvider(ABC):
     @abstractmethod
-    async def analyze(self, mode: str, paragraphs: list[dict]) -> dict[str, Any]:
+    async def analyze(self, mode: str, paragraphs: list[dict], language: str = "vi") -> dict[str, Any]:
         """Phân tích danh sách đoạn văn, trả về dict."""
 
     @abstractmethod
-    async def rewrite(self, paragraph_id: str, original_text: str, goal: str) -> dict[str, Any]:
+    async def rewrite(self, paragraph_id: str, original_text: str, goal: str, language: str = "vi") -> dict[str, Any]:
         """Viết lại một đoạn văn theo mục tiêu, trả về {rewritten_text, explanation}."""
 
     @abstractmethod
@@ -107,6 +136,7 @@ class BaseAIProvider(ABC):
         question: str,
         paragraphs: list[dict],
         history: list[dict],
+        language: str = "vi",
     ) -> dict[str, Any]:
         """Trả lời câu hỏi dựa trên văn bản, trả về {answer, referenced_paragraphs, confidence, out_of_scope}."""
 
@@ -117,7 +147,7 @@ class BaseAIProvider(ABC):
 
 class MockAIProvider(BaseAIProvider):
 
-    async def analyze(self, mode: str, paragraphs: list[dict]) -> dict[str, Any]:
+    async def analyze(self, mode: str, paragraphs: list[dict], language: str = "vi") -> dict[str, Any]:
         await _fake_latency()
         para_analyses = [
             {
@@ -183,7 +213,7 @@ class MockAIProvider(BaseAIProvider):
             }
         return result
 
-    async def rewrite(self, paragraph_id: str, original_text: str, goal: str) -> dict[str, Any]:
+    async def rewrite(self, paragraph_id: str, original_text: str, goal: str, language: str = "vi") -> dict[str, Any]:
         await _fake_latency()
         g = goal.lower()
 
@@ -250,6 +280,7 @@ class MockAIProvider(BaseAIProvider):
         question: str,
         paragraphs: list[dict],
         history: list[dict],
+        language: str = "vi",
     ) -> dict[str, Any]:
         await _fake_latency()
 
@@ -306,25 +337,25 @@ class OpenAIProvider(BaseAIProvider):
         except ImportError:
             raise RuntimeError("Cài đặt openai: pip install openai")
 
-    async def analyze(self, mode: str, paragraphs: list[dict]) -> dict[str, Any]:
-        system = READER_SYSTEM if mode == "reader" else WRITER_SYSTEM
+    async def analyze(self, mode: str, paragraphs: list[dict], language: str = "vi") -> dict[str, Any]:
+        system = build_reader_system(language) if mode == "reader" else build_writer_system(language)
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": system},
-                {"role": "user", "content": build_analyze_prompt(mode, paragraphs)},
+                {"role": "user", "content": build_analyze_prompt(mode, paragraphs, language)},
             ],
             temperature=0.3,
             response_format={"type": "json_object"},
         )
         return _safe_parse(response.choices[0].message.content or "{}")
 
-    async def rewrite(self, paragraph_id: str, original_text: str, goal: str) -> dict[str, Any]:
+    async def rewrite(self, paragraph_id: str, original_text: str, goal: str, language: str = "vi") -> dict[str, Any]:
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": REWRITE_SYSTEM},
-                {"role": "user", "content": build_rewrite_prompt(paragraph_id, original_text, goal)},
+                {"role": "system", "content": build_rewrite_system(language)},
+                {"role": "user", "content": build_rewrite_prompt(paragraph_id, original_text, goal, language)},
             ],
             temperature=0.6,
             response_format={"type": "json_object"},
@@ -336,12 +367,13 @@ class OpenAIProvider(BaseAIProvider):
         question: str,
         paragraphs: list[dict],
         history: list[dict],
+        language: str = "vi",
     ) -> dict[str, Any]:
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": CHAT_SYSTEM},
-                {"role": "user", "content": build_chat_prompt(question, paragraphs, history)},
+                {"role": "system", "content": build_chat_system(language)},
+                {"role": "user", "content": build_chat_prompt(question, paragraphs, history, language)},
             ],
             temperature=0.3,
             response_format={"type": "json_object"},
@@ -362,23 +394,23 @@ class AnthropicProvider(BaseAIProvider):
         except ImportError:
             raise RuntimeError("Cài đặt anthropic: pip install anthropic")
 
-    async def analyze(self, mode: str, paragraphs: list[dict]) -> dict[str, Any]:
-        system = READER_SYSTEM if mode == "reader" else WRITER_SYSTEM
+    async def analyze(self, mode: str, paragraphs: list[dict], language: str = "vi") -> dict[str, Any]:
+        system = build_reader_system(language) if mode == "reader" else build_writer_system(language)
         message = await self.client.messages.create(
             model=self.model,
             max_tokens=2048,
             system=system,
-            messages=[{"role": "user", "content": build_analyze_prompt(mode, paragraphs)}],
+            messages=[{"role": "user", "content": build_analyze_prompt(mode, paragraphs, language)}],
         )
         raw = message.content[0].text if message.content else "{}"
         return _safe_parse(raw)
 
-    async def rewrite(self, paragraph_id: str, original_text: str, goal: str) -> dict[str, Any]:
+    async def rewrite(self, paragraph_id: str, original_text: str, goal: str, language: str = "vi") -> dict[str, Any]:
         message = await self.client.messages.create(
             model=self.model,
             max_tokens=1024,
-            system=REWRITE_SYSTEM,
-            messages=[{"role": "user", "content": build_rewrite_prompt(paragraph_id, original_text, goal)}],
+            system=build_rewrite_system(language),
+            messages=[{"role": "user", "content": build_rewrite_prompt(paragraph_id, original_text, goal, language)}],
         )
         raw = message.content[0].text if message.content else "{}"
         return _safe_parse(raw)
@@ -388,12 +420,13 @@ class AnthropicProvider(BaseAIProvider):
         question: str,
         paragraphs: list[dict],
         history: list[dict],
+        language: str = "vi",
     ) -> dict[str, Any]:
         message = await self.client.messages.create(
             model=self.model,
             max_tokens=1024,
-            system=CHAT_SYSTEM,
-            messages=[{"role": "user", "content": build_chat_prompt(question, paragraphs, history)}],
+            system=build_chat_system(language),
+            messages=[{"role": "user", "content": build_chat_prompt(question, paragraphs, history, language)}],
         )
         raw = message.content[0].text if message.content else "{}"
         return _safe_parse(raw)
@@ -437,6 +470,7 @@ def get_provider() -> BaseAIProvider:
 # Chat prompt builder (shared)
 # ─────────────────────────────────────────────────────────────
 
+# Keep backward-compat constant
 CHAT_SYSTEM = """Bạn là trợ lý phân tích văn bản. Quy tắc bắt buộc:
 1. Chỉ trả lời dựa trên nội dung văn bản được cung cấp — không dùng kiến thức bên ngoài.
 2. Nếu câu hỏi không liên quan đến văn bản, hãy nói rõ điều đó.
@@ -444,8 +478,18 @@ CHAT_SYSTEM = """Bạn là trợ lý phân tích văn bản. Quy tắc bắt bu�
 4. Trả về JSON hợp lệ, không có markdown, không có text ngoài JSON."""
 
 
-def build_chat_prompt(question: str, paragraphs: list[dict], history: list[dict]) -> str:
+def build_chat_system(language: str = "vi") -> str:
+    return f"""Bạn là trợ lý phân tích văn bản. Quy tắc bắt buộc:
+1. Chỉ trả lời dựa trên nội dung văn bản được cung cấp — không dùng kiến thức bên ngoài.
+2. Nếu câu hỏi không liên quan đến văn bản, hãy nói rõ điều đó.
+3. Trích dẫn cụ thể đoạn nào (P1, P2...) là cơ sở cho câu trả lời.
+4. Trả về JSON hợp lệ, không có markdown, không có text ngoài JSON.
+5. {_lang_instruction(language)}"""
+
+
+def build_chat_prompt(question: str, paragraphs: list[dict], history: list[dict], language: str = "vi") -> str:
     context = "\n\n".join(f"[{p['id']}] {p['text']}" for p in paragraphs)
+    lang_note = _lang_instruction(language)
 
     history_block = ""
     if history:
@@ -456,7 +500,7 @@ def build_chat_prompt(question: str, paragraphs: list[dict], history: list[dict]
         history_block = "\n=== LỊCH SỬ HỘI THOẠI ===\n" + "\n".join(lines)
 
     schema = json.dumps({
-        "answer": "<câu trả lời dựa trên văn bản, 2-5 câu>",
+        "answer": "<answer based on the document, 2-5 sentences>",
         "referenced_paragraphs": ["P1", "P2"],
         "confidence": "<high|medium|low>",
         "out_of_scope": False,
@@ -470,6 +514,7 @@ def build_chat_prompt(question: str, paragraphs: list[dict], history: list[dict]
 {question}
 
 === YÊU CẦU OUTPUT ===
+{lang_note}
 Trả về JSON theo schema (không markdown, không giải thích):
 {schema}
 

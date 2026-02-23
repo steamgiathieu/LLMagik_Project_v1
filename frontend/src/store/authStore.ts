@@ -10,7 +10,7 @@ interface AuthState {
 
   // Actions
   login: (username: string, password: string) => Promise<void>;
-  register: (data: { username: string; email: string; password: string; nickname: string }) => Promise<void>;
+  register: (data: { username: string; email: string; password: string; nickname: string; language?: string }) => Promise<void>;
   logout: () => Promise<void>;
   fetchMe: () => Promise<void>;
   updateProfile: (data: { language?: string; role?: string; age_group?: string }) => Promise<void>;

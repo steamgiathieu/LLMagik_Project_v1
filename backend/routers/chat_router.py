@@ -121,7 +121,13 @@ async def chat(
     db.add(user_msg)
     db.flush()
 
-    # 6. Call AI
+    # 6. Get user's language preference
+    user_profile = db.query(models.UserProfile).filter(
+        models.UserProfile.user_id == current_user.id
+    ).first()
+    user_language = user_profile.language if user_profile else "vi"
+
+    # 7. Call AI
     provider = get_provider()
     t0 = time.monotonic()
     try:
@@ -129,6 +135,7 @@ async def chat(
             question=payload.user_question,
             paragraphs=paragraphs,
             history=history,
+            language=user_language,
         )
     except Exception as e:
         db.rollback()

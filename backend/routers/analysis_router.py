@@ -90,11 +90,17 @@ async def analyze_document(
     # Convert paragraphs to plain dicts for AI service
     paragraphs = [{"id": p.id, "text": p.text} for p in payload.paragraphs]
 
+    # Get user's language preference
+    user_profile = db.query(models.UserProfile).filter(
+        models.UserProfile.user_id == current_user.id
+    ).first()
+    user_language = user_profile.language if user_profile else "vi"
+
     # Call AI
     provider = get_provider()
     t0 = time.monotonic()
     try:
-        ai_result = await provider.analyze(mode=payload.mode, paragraphs=paragraphs)
+        ai_result = await provider.analyze(mode=payload.mode, paragraphs=paragraphs, language=user_language)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI service lỗi: {e}")
     elapsed_ms = int((time.monotonic() - t0) * 1000)
