@@ -12,9 +12,9 @@ const LANGUAGES = [
 ];
 
 export default function LanguageSwitcher() {
-  const { user, updateProfile } = useAuthStore();
+  const { user, profile, updateProfile } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
-  const currentLang = user?.language || "vi";
+  const currentLang = user?.language || profile?.language || "vi";
 
   const currentLanguage = LANGUAGES.find((lang) => lang.code === currentLang) || LANGUAGES[0];
 

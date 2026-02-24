@@ -268,6 +268,7 @@ export const authApi = {
     password: string;
     nickname: string;
     language?: string;
+    age_group?: string;
   }) =>
     apiFetch<AuthResponse>("/auth/register", {
       method: "POST",

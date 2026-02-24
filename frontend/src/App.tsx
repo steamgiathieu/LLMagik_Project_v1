@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Reader from "./pages/Reader";
 import History from "./pages/History";
+import Profile from "./pages/Profile";
 import LanguageSwitcher from "./components/LanguageSwitcher";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -87,6 +88,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <History />
+              <LanguageSwitcher />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
               <LanguageSwitcher />
             </ProtectedRoute>
           }

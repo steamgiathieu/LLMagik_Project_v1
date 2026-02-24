@@ -41,6 +41,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=6, examples=["securepass123"])
     nickname: str = Field(..., min_length=1, max_length=100, examples=["John"])
     language: Optional[str] = Field("vi", min_length=2, max_length=5, examples=["vi"])
+    age_group: Optional[str] = Field("adult", examples=["adult"])
 
 
 class LoginRequest(BaseModel):
@@ -169,12 +170,15 @@ def register(
     # Validate language
     lang = payload.language if payload.language in SUPPORTED_LANGUAGES else "vi"
 
+    # Validate age group
+    age_group = payload.age_group if payload.age_group in {"teen", "adult", "senior"} else "adult"
+
     # Create user profile
     profile = models.UserProfile(
         user_id=user.id,
         language=lang,
         role="reader",
-        age_group="adult",
+        age_group=age_group,
     )
     db.add(profile)
     db.commit()

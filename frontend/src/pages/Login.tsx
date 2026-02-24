@@ -14,6 +14,7 @@ export default function Login() {
     email: "",
     password: "",
     nickname: "",
+    age_group: "adult",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -28,6 +29,7 @@ export default function Login() {
           email: formData.email,
           password: formData.password,
           nickname: formData.nickname,
+          age_group: formData.age_group,
         });
       }
       navigate("/");
@@ -150,6 +152,22 @@ export default function Login() {
                     onChange={update("nickname")}
                     required
                   />
+                </div>
+
+                <div className="auth-field">
+                  <label htmlFor="age_group">
+                    <span className="auth-field-icon">🎂</span> Độ tuổi
+                  </label>
+                  <select
+                    id="age_group"
+                    value={formData.age_group}
+                    onChange={update("age_group")}
+                    required
+                  >
+                    <option value="teen">Thanh thiếu niên (13-18)</option>
+                    <option value="adult">Người lớn (18+)</option>
+                    <option value="senior">Cao niên (60+)</option>
+                  </select>
                 </div>
               </>
             )}

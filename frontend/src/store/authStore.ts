@@ -10,7 +10,7 @@ interface AuthState {
 
   // Actions
   login: (username: string, password: string) => Promise<void>;
-  register: (data: { username: string; email: string; password: string; nickname: string; language?: string }) => Promise<void>;
+  register: (data: { username: string; email: string; password: string; nickname: string; language?: string; age_group?: string }) => Promise<void>;
   logout: () => Promise<void>;
   fetchMe: () => Promise<void>;
   updateProfile: (data: { language?: string; role?: string; age_group?: string }) => Promise<void>;
@@ -33,10 +33,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       tokenHelper.save(res.access_token);
       console.log("Token saved, current token:", tokenHelper.get());
       
-      // Set user from login response
-      set({ user: res.user, isLoading: false });
-      
-      // Don't fetch profile - just use what server returned
+      // Fetch full profile so UI always has language/age_group immediately
+      const me = await authApi.me();
+      set({ user: me, profile: me.profile, isLoading: false });
     } catch (err: any) {
       console.error("Login error:", err);
       set({ error: err.message, isLoading: false });
@@ -54,10 +53,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       tokenHelper.save(res.access_token);
       console.log("Token saved, current token:", tokenHelper.get());
       
-      // Set user from register response
-      set({ user: res.user, isLoading: false });
-      
-      // Don't fetch profile - just use what server returned
+      // Fetch full profile so UI always has language/age_group immediately
+      const me = await authApi.me();
+      set({ user: me, profile: me.profile, isLoading: false });
     } catch (err: any) {
       console.error("Register error:", err);
       set({ error: err.message, isLoading: false });
@@ -94,7 +92,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const updated = await authApi.updateProfile(data);
-      set({ profile: updated, isLoading: false });
+      set((state) => ({
+        profile: updated,
+        user: state.user ? { ...state.user, language: updated.language } : null,
+        isLoading: false,
+      }));
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
       throw err;

@@ -8,7 +8,7 @@ import "./Home.css";
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const { user, profile, logout } = useAuthStore();
   const { documents, fetchDocuments, deleteDocument, isLoading } = useDocumentStore();
   const [showUpload, setShowUpload] = useState(false);
 
@@ -42,6 +42,7 @@ export default function Home() {
   };
 
   const recentDocs = documents.slice(0, 4);
+  const currentLang = user?.language || profile?.language || "vi";
 
   return (
     <div className="dashboard-page">
@@ -72,7 +73,7 @@ export default function Home() {
             <div className="dashboard-profile-info">
               <span className="dashboard-profile-name">{user?.nickname}</span>
               <span className="dashboard-profile-lang">
-                {langFlags[user?.language || "vi"]} {user?.language?.toUpperCase()}
+                {langFlags[currentLang]} {currentLang.toUpperCase()}
               </span>
             </div>
           </button>
@@ -265,7 +266,7 @@ export default function Home() {
               <span className="dashboard-stat-icon">🌐</span>
               <div className="dashboard-stat-content">
                 <span className="dashboard-stat-value">
-                  {langFlags[user?.language || "vi"]}
+                  {langFlags[currentLang]}
                 </span>
                 <span className="dashboard-stat-label">Ngôn ngữ</span>
               </div>

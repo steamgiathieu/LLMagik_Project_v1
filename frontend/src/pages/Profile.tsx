@@ -5,15 +5,21 @@ import "./Profile.css";
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, profile, updateProfile, logout, isLoading } = useAuthStore();
+  const { user, profile, updateProfile, logout, fetchMe, isLoading } = useAuthStore();
 
   const [formData, setFormData] = useState({
-    language: profile?.language || "vi",
+    language: profile?.language || user?.language || "vi",
     role: profile?.role || "reader",
     age_group: profile?.age_group || "adult",
   });
 
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!profile) {
+      fetchMe();
+    }
+  }, [profile, fetchMe]);
 
   useEffect(() => {
     if (profile) {
@@ -22,8 +28,13 @@ export default function Profile() {
         role: profile.role,
         age_group: profile.age_group,
       });
+      return;
     }
-  }, [profile]);
+
+    if (user?.language) {
+      setFormData((prev) => ({ ...prev, language: user.language }));
+    }
+  }, [profile, user?.language]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
