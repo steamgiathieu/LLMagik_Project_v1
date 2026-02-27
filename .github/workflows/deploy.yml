@@ -25,8 +25,18 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Validate deploy environment
+        run: |
+          if [ -z "${{ secrets.VITE_API_URL }}" ]; then
+            echo "Missing required secret: VITE_API_URL"
+            exit 1
+          fi
+
       - name: Build frontend
         working-directory: frontend
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_BASE_URL: /LLMagik/
         run: npm run build
 
       - name: Deploy to GitHub Pages
