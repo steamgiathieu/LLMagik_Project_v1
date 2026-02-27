@@ -55,7 +55,8 @@ Write-Host "`n" -ForegroundColor Green
 Write-Host "📋 Next Steps:`n" -ForegroundColor Yellow
 
 Write-Host "1️⃣  Update GitHub configuration:" -ForegroundColor Green
-Write-Host "   - Edit frontend/.env.production" -ForegroundColor Cyan
+Write-Host "   - Local/dev: edit frontend/.env" -ForegroundColor Cyan
+Write-Host "   - CI deploy: set VITE_API_URL in GitHub Secrets (Actions)" -ForegroundColor Cyan
 Write-Host "   - Change USERNAME to your GitHub username" -ForegroundColor Cyan
 Write-Host "   - Change VITE_API_URL to your backend URL" -ForegroundColor Cyan
 

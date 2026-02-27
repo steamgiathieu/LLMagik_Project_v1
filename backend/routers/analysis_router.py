@@ -12,6 +12,7 @@ import models_text
 import models_analysis
 import schemas_analysis
 from services.ai_service import get_provider
+from mongo import save_analysis_snapshot, mongo_enabled
 
 router = APIRouter(prefix="/analysis", tags=["Analysis"])
 
@@ -143,6 +144,23 @@ async def analyze_document(
     db.add(record)
     db.commit()
     db.refresh(record)
+
+    if mongo_enabled():
+        try:
+            await save_analysis_snapshot({
+                "analysis_id": record.id,
+                "document_id": record.document_id,
+                "user_id": record.user_id,
+                "mode": record.mode,
+                "ai_provider": record.ai_provider,
+                "processing_ms": record.processing_ms,
+                "created_at": record.created_at.isoformat() if record.created_at else None,
+                "result_summary": record.result_summary,
+                "result": ai_result,
+            })
+        except Exception:
+            # Mongo is optional; do not fail API response if snapshot persistence fails.
+            pass
 
     return _build_response(record)
 

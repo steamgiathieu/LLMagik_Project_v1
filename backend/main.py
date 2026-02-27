@@ -14,6 +14,7 @@ from routers.analysis_router import router as analysis_router
 from routers.rewrite_router import router as rewrite_router
 from routers.chat_router import router as chat_router
 from routers.history_router import router as history_router
+from mongo import init_mongo, close_mongo
 
 
 @asynccontextmanager
@@ -23,7 +24,9 @@ async def lifespan(app: FastAPI):
     models_analysis.Base.metadata.create_all(bind=engine)
     models_rewrite.Base.metadata.create_all(bind=engine)
     models_chat.Base.metadata.create_all(bind=engine)
+    init_mongo()
     yield
+    close_mongo()
 
 
 app = FastAPI(
