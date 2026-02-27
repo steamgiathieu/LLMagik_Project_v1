@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import { useDocumentStore } from "@/store/documentStore";
 import UploadModal from "@/components/UploadModal";
-import { useUiPreferences } from "@/lib/uiPreferences";
+import { normalizeLanguage, useUiPreferences } from "@/lib/uiPreferences";
 import "./Home.css";
 
 export default function Home() {
@@ -38,13 +38,10 @@ export default function Home() {
   const langFlags: Record<string, string> = {
     vi: "🇻🇳",
     en: "🇬🇧",
-    zh: "🇨🇳",
-    ja: "🇯🇵",
-    fr: "🇫🇷",
   };
 
   const recentDocs = documents.slice(0, 4);
-  const currentLang = user?.language || profile?.language || "vi";
+  const currentLang = normalizeLanguage(user?.language || profile?.language || "vi");
 
   return (
     <div className="dashboard-page">

@@ -5,7 +5,7 @@
   flex-direction: column;
   gap: 16px;
   padding: 20px;
-  background: white;
+  background: var(--bg-surface);
   border-radius: 8px;
   max-height: 100%;
   overflow-y: auto;
@@ -14,7 +14,7 @@
 .rewrite-panel h3 {
   margin: 0;
   font-size: 18px;
-  color: #1f2937;
+  color: var(--text-main);
 }
 
 .rewrite-section {
@@ -26,7 +26,7 @@
 .rewrite-section label {
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-main);
 }
 
 .rewrite-textarea {
@@ -68,7 +68,7 @@
 
 .preset-btn:hover:not(:disabled) {
   background: #d1d5db;
-  border-color: #9ca3af;
+  border-color: var(--text-muted);
 }
 
 .preset-btn:disabled {
@@ -84,7 +84,7 @@
   border-radius: 6px;
   font-size: 14px;
   line-height: 1.6;
-  color: #374151;
+  color: var(--text-main);
   max-height: 150px;
   overflow-y: auto;
 }
@@ -141,3 +141,38 @@
   background: #9ca3af;
   cursor: not-allowed;
 }
+
+:root[data-theme="dark"] .rewrite-panel {
+  background: var(--bg-surface);
+}
+
+:root[data-theme="dark"] .rewrite-panel h3,
+:root[data-theme="dark"] .rewrite-section label,
+:root[data-theme="dark"] .rewrite-original,
+:root[data-theme="dark"] .rewrite-result {
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .rewrite-textarea {
+  background: #0f172a;
+  color: var(--text-main);
+  border-color: var(--border-subtle);
+}
+
+:root[data-theme="dark"] .rewrite-textarea:disabled {
+  background: #1e293b;
+}
+
+:root[data-theme="dark"] .preset-btn {
+  background: #1e293b;
+  border-color: var(--border-subtle);
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .rewrite-original,
+:root[data-theme="dark"] .rewrite-result {
+  background: #0b1220;
+  border-color: var(--border-subtle);
+}
+
+

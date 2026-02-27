@@ -92,9 +92,6 @@ export default function Profile() {
               >
                 <option value="vi">🇻🇳 Tiếng Việt</option>
                 <option value="en">🇬🇧 English</option>
-                <option value="zh">🇨🇳 中文 (Chinese)</option>
-                <option value="ja">🇯🇵 日本語 (Japanese)</option>
-                <option value="fr">🇫🇷 Français (French)</option>
               </select>
               <p className="form-hint">{t("AI sẽ trả lời phân tích, chat và viết lại bằng ngôn ngữ này", "AI analysis, chat and rewrite outputs follow this language")}</p>
             </div>

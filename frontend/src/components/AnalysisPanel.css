@@ -4,7 +4,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: white;
+  background: var(--bg-surface);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -16,7 +16,7 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .panel-loading p,
@@ -27,7 +27,7 @@
 
 .hint {
   font-size: 12px !important;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .panel-scroll {
@@ -46,14 +46,14 @@
 .panel-section h3 {
   margin: 0 0 12px;
   font-size: 16px;
-  color: #1f2937;
+  color: var(--text-main);
 }
 
 .panel-section p {
   margin: 0 0 8px;
   font-size: 14px;
   line-height: 1.5;
-  color: #374151;
+  color: var(--text-main);
 }
 
 .panel-section p:last-child {
@@ -67,7 +67,7 @@
 
 .panel-section li {
   font-size: 14px;
-  color: #374151;
+  color: var(--text-main);
   margin-bottom: 6px;
 }
 
@@ -77,7 +77,7 @@
 }
 
 .issue-card {
-  background: white;
+  background: var(--bg-surface);
   padding: 12px;
   border-radius: 4px;
   margin-bottom: 8px;
@@ -85,7 +85,7 @@
 }
 
 .issue-card strong {
-  color: #1f2937;
+  color: var(--text-main);
 }
 
 .issue-card:last-child {
@@ -105,7 +105,7 @@
 }
 
 .suggestion-card {
-  background: white;
+  background: var(--bg-surface);
   padding: 12px;
   border-radius: 4px;
   margin-bottom: 12px;
@@ -137,12 +137,18 @@
   text-align: right;
 }
 
+.readability-score {
+  display: inline-block;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
 .panel-footer {
   padding: 12px 20px;
   border-top: 1px solid #e5e7eb;
   background: #f9fafb;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .spinner {
@@ -159,3 +165,41 @@
     transform: rotate(360deg);
   }
 }
+
+:root[data-theme="dark"] .analysis-panel {
+  background: var(--bg-surface);
+}
+
+:root[data-theme="dark"] .panel-loading,
+:root[data-theme="dark"] .panel-empty,
+:root[data-theme="dark"] .hint,
+:root[data-theme="dark"] .panel-footer {
+  color: var(--text-muted);
+}
+
+:root[data-theme="dark"] .panel-section,
+:root[data-theme="dark"] .panel-footer {
+  background: #0b1220;
+}
+
+:root[data-theme="dark"] .panel-section h3,
+:root[data-theme="dark"] .panel-section p,
+:root[data-theme="dark"] .panel-section li,
+:root[data-theme="dark"] .issue-card strong {
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .issue-card,
+:root[data-theme="dark"] .suggestion-card {
+  background: #0f172a;
+}
+
+:root[data-theme="dark"] .score-table td {
+  border-bottom-color: var(--border-subtle);
+}
+
+:root[data-theme="dark"] .panel-footer {
+  border-top-color: var(--border-subtle);
+}
+
+

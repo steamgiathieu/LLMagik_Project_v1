@@ -14,9 +14,6 @@ import "./LanguageSwitcher.css";
 const LANGUAGES = [
   { code: "vi", name: "Tiếng Việt", flag: "🇻🇳" },
   { code: "en", name: "English", flag: "🇬🇧" },
-  { code: "zh", name: "中文", flag: "🇨🇳" },
-  { code: "ja", name: "日本語", flag: "🇯🇵" },
-  { code: "fr", name: "Français", flag: "🇫🇷" },
 ];
 
 export default function LanguageSwitcher() {

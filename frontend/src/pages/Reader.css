@@ -1,7 +1,7 @@
 .reader-page {
   min-height: 100vh;
   background: #f3f4f8;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .reader-header {
@@ -10,7 +10,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 12px 20px;
-  background: #ffffff;
+  background: var(--bg-surface);
   border-bottom: 1px solid #e5e7eb;
   position: sticky;
   top: 0;
@@ -39,8 +39,8 @@
 .btn-open-reader,
 .btn-close-popup {
   border: 1px solid #d1d5db;
-  background: #ffffff;
-  color: #111827;
+  background: var(--bg-surface);
+  color: var(--text-main);
   border-radius: 10px;
   font-size: 0.9rem;
   padding: 8px 12px;
@@ -54,7 +54,7 @@
 .btn-primary:hover,
 .btn-open-reader:hover,
 .btn-close-popup:hover {
-  border-color: #9ca3af;
+  border-color: var(--text-muted);
   background: #f9fafb;
 }
 
@@ -69,7 +69,7 @@
 .reader-sidebar-left {
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--bg-surface);
   border: 1px solid #e5e7eb;
   border-radius: 14px;
   overflow: hidden;
@@ -89,12 +89,12 @@
   padding: 12px;
   font-weight: 600;
   cursor: pointer;
-  color: #4b5563;
+  color: var(--text-muted);
 }
 
 .sidebar-tabs button.active {
-  background: #ffffff;
-  color: #0f172a;
+  background: var(--bg-surface);
+  color: var(--text-main);
 }
 
 .sidebar-content {
@@ -109,7 +109,7 @@
 
 .preview-card {
   height: 100%;
-  background: #ffffff;
+  background: var(--bg-surface);
   border: 1px solid #e5e7eb;
   border-radius: 14px;
   padding: 20px;
@@ -125,7 +125,7 @@
 
 .preview-head p {
   margin: 6px 0 0;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
@@ -147,7 +147,7 @@
 
 .preview-paragraph-item {
   border: 1px solid #e5e7eb;
-  background: #ffffff;
+  background: var(--bg-surface);
   border-radius: 10px;
   padding: 10px;
   text-align: left;
@@ -167,7 +167,7 @@
 
 .preview-paragraph-item p {
   margin: 0;
-  color: #374151;
+  color: var(--text-main);
   font-size: 0.88rem;
   line-height: 1.5;
   display: -webkit-box;
@@ -199,19 +199,19 @@
 }
 
 .preview-empty {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .btn-open-reader {
   width: fit-content;
   background: #111827;
   color: #ffffff;
-  border-color: #111827;
+  border-color: var(--text-main);
 }
 
 .btn-open-reader:hover {
   background: #1f2937;
-  border-color: #1f2937;
+  border-color: var(--text-main);
 }
 
 .reader-inline-error {
@@ -242,7 +242,7 @@
 .reader-popup {
   width: min(980px, 95vw);
   height: min(88vh, 920px);
-  background: #ffffff;
+  background: var(--bg-surface);
   border-radius: 16px;
   overflow: hidden;
   display: flex;
@@ -270,7 +270,7 @@
 
 .reader-analysis-modal {
   width: min(500px, 94vw);
-  background: #ffffff;
+  background: var(--bg-surface);
   border-radius: 14px;
   border: 1px solid #d1d5db;
   padding: 24px;
@@ -283,7 +283,7 @@
 
 .reader-analysis-modal p {
   margin: 0;
-  color: #4b5563;
+  color: var(--text-muted);
 }
 
 .reader-loading,
@@ -346,3 +346,82 @@
     min-width: 170px;
   }
 }
+
+:root[data-theme="dark"] .reader-page {
+  background: var(--bg-page);
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .reader-header,
+:root[data-theme="dark"] .reader-sidebar-left,
+:root[data-theme="dark"] .preview-card,
+:root[data-theme="dark"] .reader-popup,
+:root[data-theme="dark"] .reader-analysis-modal {
+  background: var(--bg-surface);
+  border-color: var(--border-subtle);
+}
+
+:root[data-theme="dark"] .mode-select,
+:root[data-theme="dark"] .btn-analyze,
+:root[data-theme="dark"] .btn-back,
+:root[data-theme="dark"] .btn-primary,
+:root[data-theme="dark"] .btn-close-popup {
+  background: #0b1220;
+  color: var(--text-main);
+  border-color: var(--border-subtle);
+}
+
+:root[data-theme="dark"] .mode-select:hover,
+:root[data-theme="dark"] .btn-analyze:hover,
+:root[data-theme="dark"] .btn-back:hover,
+:root[data-theme="dark"] .btn-primary:hover,
+:root[data-theme="dark"] .btn-close-popup:hover {
+  background: #111b2e;
+  border-color: #64748b;
+}
+
+:root[data-theme="dark"] .sidebar-tabs {
+  background: #0b1220;
+  border-bottom-color: var(--border-subtle);
+}
+
+:root[data-theme="dark"] .sidebar-tabs button {
+  color: var(--text-muted);
+}
+
+:root[data-theme="dark"] .sidebar-tabs button.active {
+  background: #0f172a;
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .preview-head p,
+:root[data-theme="dark"] .preview-empty,
+:root[data-theme="dark"] .reader-analysis-modal p {
+  color: var(--text-muted);
+}
+
+:root[data-theme="dark"] .preview-body {
+  background: #0b1220;
+  border-color: var(--border-subtle);
+}
+
+:root[data-theme="dark"] .preview-paragraph-item {
+  background: #0f172a;
+  border-color: var(--border-subtle);
+}
+
+:root[data-theme="dark"] .preview-paragraph-item p {
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .preview-paragraph-item.active {
+  background: #10243f;
+  border-color: #3b82f6;
+}
+
+:root[data-theme="dark"] .reader-popup-header,
+:root[data-theme="dark"] .panel-footer {
+  border-color: var(--border-subtle);
+}
+
+

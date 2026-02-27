@@ -10,6 +10,7 @@ import Reader from "./pages/Reader";
 import History from "./pages/History";
 import Profile from "./pages/Profile";
 import LanguageSwitcher from "./components/LanguageSwitcher";
+import CreditFooter from "./components/CreditFooter";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuthStore();
@@ -17,7 +18,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { fetchMe, user, profile, logout } = useAuthStore();
+  const { fetchMe, user, profile, logout, updateProfile } = useAuthStore();
   const initRef = useRef(false);
 
   useEffect(() => {
@@ -41,6 +42,14 @@ export default function App() {
     saveLanguage(language);
     document.documentElement.lang = language;
   }, [profile?.language, user?.language]);
+
+  useEffect(() => {
+    if (!profile?.language) return;
+    const normalized = normalizeLanguage(profile.language);
+    if (profile.language !== normalized) {
+      updateProfile({ language: normalized }).catch(() => {});
+    }
+  }, [profile?.language, updateProfile]);
 
   useEffect(() => {
     // Auto-refresh token every 25 minutes (token expires in 30 minutes)
@@ -114,6 +123,7 @@ export default function App() {
           }
         />
       </Routes>
+      <CreditFooter />
     </BrowserRouter>
   );
 }

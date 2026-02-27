@@ -120,8 +120,63 @@ def _analysis_schema(mode: str) -> dict:
     }
     if mode == "reader":
         base["key_takeaways"] = ["<điểm cốt lõi 1>", "<điểm cốt lõi 2>"]
-        base["reading_difficulty"] = "<easy|medium|hard>"
+        base["reading_difficulty"] = "<easy|medium|hard (legacy)>"
+        base["readability_metrics"] = {
+            "accessibility_score": 78,
+            "accessibility_label": "<dễ tiếp cận|trung bình|chuyên sâu>",
+            "avg_sentence_length_words": 17.4,
+            "long_sentence_ratio": 0.22,
+            "lexical_diversity": 0.48,
+            "recommended_reader_profile": "<phổ thông|đại học|chuyên môn>",
+            "note": "<nhận xét ngắn về mức dễ đọc dựa trên chỉ số>",
+        }
+        base["claim_checks"] = [{
+            "paragraph_id": "P1",
+            "claim": "<một phát biểu chính cần kiểm chứng>",
+            "evidence_in_text": "<chứng cứ trực tiếp trong bài hoặc 'không nêu'>",
+            "support_level": "<supported|weak|unsupported>",
+            "risk_if_believed": "<rủi ro nếu người đọc tin ngay>",
+            "verification_prompt": "<câu hỏi kiểm chứng cụ thể>",
+        }]
+        base["critical_reading_guard"] = {
+            "persuasion_risk": "<low|medium|high>",
+            "manipulation_signals": [
+                "<dấu hiệu thao túng 1>",
+                "<dấu hiệu thao túng 2>"
+            ],
+            "missing_context_flags": [
+                "<điểm thiếu bối cảnh 1>"
+            ],
+            "fact_check_actions": [
+                "<hành động kiểm chứng 1>",
+                "<hành động kiểm chứng 2>"
+            ],
+            "alternative_views": [
+                "<góc nhìn thay thế 1>"
+            ],
+            "do_not_conclude_yet": [
+                "<điều chưa đủ cơ sở để kết luận>"
+            ],
+        }
         base["logic_issues"] = [{"paragraph_id": "P1", "issue": "<vấn đề logic>"}]
+        base["reader_summary_breakdown"] = {
+            "main_points": ["<ý chính 1>", "<ý chính 2>"],
+            "figures": ["<số liệu 1 (nếu có)>"],
+            "argument_flow": ["<luận điểm A>", "<suy luận B>", "<kết luận C>"],
+        }
+        base["deep_style_analysis"] = {
+            "emotional_tone": "<calm|neutral|urgent|fearful|aggressive|inspirational>",
+            "inflammatory_word_frequency": "<low|medium|high (kèm tỷ lệ ước tính)>",
+            "group_bias_level": "<low|medium|high>",
+            "notes": "<nhận xét ngắn về dấu hiệu kích động/thiên lệch nhóm>",
+        }
+        base["logic_diagnostics"] = [{
+            "paragraph_id": "P1",
+            "issue_type": "<fallacy|conclusion_jump|fear_appeal|spelling_grammar>",
+            "description": "<mô tả vấn đề>",
+            "evidence": "<trích cụm từ ngắn>",
+            "severity": "<low|medium|high>",
+        }]
     else:
         base["style_issues"] = [{"paragraph_id": "P1", "issue": "...", "severity": "low|medium|high"}]
         base["rewrite_suggestions"] = [{"paragraph_id": "P1", "original": "...", "suggestion": "..."}]
@@ -154,6 +209,283 @@ class BaseAIProvider(ABC):
 
 
 # ─────────────────────────────────────────────────────────────
+# Reader heuristics for mock provider
+# ─────────────────────────────────────────────────────────────
+
+_INFLAMMATORY_WORDS = {
+    "vi": ["phản bội", "thảm họa", "hủy diệt", "đáng sợ", "kinh hoàng", "khủng khiếp", "độc ác"],
+    "en": ["betrayal", "disaster", "destroy", "terrifying", "horrific", "evil", "panic"],
+}
+_FEAR_WORDS = {
+    "vi": ["đe dọa", "nguy cơ", "sợ", "hoảng loạn", "mất an toàn", "sụp đổ", "diệt vong"],
+    "en": ["threat", "risk", "fear", "panic", "unsafe", "collapse", "doom"],
+}
+_ABSOLUTE_WORDS = {
+    "vi": ["tất cả", "mọi", "không ai", "duy nhất", "chắc chắn", "luôn luôn", "không bao giờ"],
+    "en": ["all", "everyone", "nobody", "only", "certainly", "always", "never"],
+}
+_GROUP_WORDS = {
+    "vi": ["phụ nữ", "đàn ông", "người nghèo", "người giàu", "người trẻ", "người già", "dân nhập cư"],
+    "en": ["women", "men", "poor", "rich", "young", "elderly", "immigrants"],
+}
+
+
+def _detect_language_bucket(text: str) -> str:
+    return "vi" if re.search(r"[ăâđêôơư]", text.lower()) else "en"
+
+
+def _extract_figures(paragraphs: list[dict]) -> list[str]:
+    figures: list[str] = []
+    seen: set[str] = set()
+    for p in paragraphs:
+        numbers = re.findall(r"\b\d+(?:[.,]\d+)?%?\b", p["text"])
+        if not numbers:
+            continue
+        snippet = ", ".join(numbers[:4])
+        text = f"{p['id']}: {snippet}"
+        if text not in seen:
+            seen.add(text)
+            figures.append(text)
+    return figures[:8]
+
+
+def _estimate_inflammatory_frequency(paragraphs: list[dict], lang_bucket: str) -> tuple[str, int, int]:
+    words = re.findall(r"\w+", " ".join(p["text"].lower() for p in paragraphs))
+    total = max(len(words), 1)
+    triggers = _INFLAMMATORY_WORDS.get(lang_bucket, _INFLAMMATORY_WORDS["en"])
+    hit = sum(1 for w in words if w in triggers)
+    ratio = hit / total
+    if ratio >= 0.03:
+        level = "high"
+    elif ratio >= 0.01:
+        level = "medium"
+    else:
+        level = "low"
+    return f"{level} ({ratio:.1%})", hit, total
+
+
+def _estimate_group_bias(paragraphs: list[dict], lang_bucket: str) -> str:
+    all_text = " ".join(p["text"].lower() for p in paragraphs)
+    group_hits = sum(1 for w in _GROUP_WORDS.get(lang_bucket, _GROUP_WORDS["en"]) if w in all_text)
+    absolute_hits = sum(1 for w in _ABSOLUTE_WORDS.get(lang_bucket, _ABSOLUTE_WORDS["en"]) if w in all_text)
+    score = group_hits + absolute_hits
+    if score >= 4:
+        return "high"
+    if score >= 2:
+        return "medium"
+    return "low"
+
+
+def _detect_emotional_tone(paragraphs: list[dict], lang_bucket: str) -> str:
+    all_text = " ".join(p["text"].lower() for p in paragraphs)
+    fear_hits = sum(1 for w in _FEAR_WORDS.get(lang_bucket, _FEAR_WORDS["en"]) if w in all_text)
+    inflame_hits = sum(1 for w in _INFLAMMATORY_WORDS.get(lang_bucket, _INFLAMMATORY_WORDS["en"]) if w in all_text)
+    if fear_hits + inflame_hits >= 3:
+        return "fearful"
+    if "!" in all_text:
+        return "urgent"
+    return random.choice(["neutral", "calm", "inspirational"])
+
+
+def _build_argument_flow(paragraphs: list[dict]) -> list[str]:
+    flow: list[str] = []
+    for p in paragraphs[:4]:
+        short = p["text"][:90].strip()
+        flow.append(f"{p['id']}: {short}...")
+    return flow
+
+
+def _detect_logic_diagnostics(paragraphs: list[dict], lang_bucket: str) -> list[dict[str, str]]:
+    diagnostics: list[dict[str, str]] = []
+    abs_words = _ABSOLUTE_WORDS.get(lang_bucket, _ABSOLUTE_WORDS["en"])
+    fear_words = _FEAR_WORDS.get(lang_bucket, _FEAR_WORDS["en"])
+
+    for p in paragraphs:
+        txt = p["text"]
+        low = txt.lower()
+
+        if any(w in low for w in abs_words):
+            diagnostics.append({
+                "paragraph_id": p["id"],
+                "issue_type": "fallacy",
+                "description": "Có xu hướng khái quát hóa/khẳng định tuyệt đối, dễ tạo lập luận thiếu điều kiện.",
+                "evidence": next((w for w in abs_words if w in low), None) or txt[:60],
+                "severity": "medium",
+            })
+
+        if any(w in low for w in ["vì vậy", "do đó", "therefore", "thus", "hence"]) and not re.search(r"\d", low):
+            diagnostics.append({
+                "paragraph_id": p["id"],
+                "issue_type": "conclusion_jump",
+                "description": "Có dấu hiệu nhảy kết luận nhưng thiếu bằng chứng định lượng hoặc ví dụ cụ thể.",
+                "evidence": txt[:80],
+                "severity": "medium",
+            })
+
+        fear_hit = next((w for w in fear_words if w in low), None)
+        if fear_hit:
+            diagnostics.append({
+                "paragraph_id": p["id"],
+                "issue_type": "fear_appeal",
+                "description": "Sử dụng ngôn từ gây sợ hãi để thuyết phục thay vì chứng cứ.",
+                "evidence": fear_hit,
+                "severity": "high",
+            })
+
+        if re.search(r"\s{2,}", txt) or re.search(r"[!?]{2,}", txt):
+            diagnostics.append({
+                "paragraph_id": p["id"],
+                "issue_type": "spelling_grammar",
+                "description": "Có dấu hiệu lỗi chính tả/ngữ pháp hoặc dấu câu không chuẩn.",
+                "evidence": txt[:80],
+                "severity": "low",
+            })
+
+    return diagnostics[:12]
+
+
+def _compute_readability_metrics(paragraphs: list[dict]) -> dict[str, Any]:
+    text = " ".join(p["text"] for p in paragraphs).strip()
+    if not text:
+        return {
+            "accessibility_score": 75,
+            "accessibility_label": "trung bình",
+            "avg_sentence_length_words": 0.0,
+            "long_sentence_ratio": 0.0,
+            "lexical_diversity": 0.0,
+            "recommended_reader_profile": "phổ thông",
+            "note": "Thiếu dữ liệu để ước lượng chính xác, dùng mức trung tính.",
+        }
+
+    sentences = [s.strip() for s in re.split(r"[.!?]+", text) if s.strip()]
+    words = re.findall(r"\w+", text.lower())
+    sentence_count = max(len(sentences), 1)
+    total_words = max(len(words), 1)
+
+    sentence_lengths = [len(re.findall(r"\w+", s)) for s in sentences] or [total_words]
+    avg_sentence_len = sum(sentence_lengths) / len(sentence_lengths)
+    long_sentence_ratio = sum(1 for n in sentence_lengths if n >= 25) / len(sentence_lengths)
+    lexical_diversity = len(set(words)) / total_words
+
+    # Heuristic readability score: higher is easier to read.
+    sentence_penalty = min(max(avg_sentence_len - 14, 0) * 2.2, 35)
+    long_sentence_penalty = min(long_sentence_ratio * 40, 30)
+    lexical_penalty = min(max(lexical_diversity - 0.52, 0) * 35, 20)
+    raw_score = 100 - sentence_penalty - long_sentence_penalty - lexical_penalty
+    score = int(round(max(0, min(100, raw_score))))
+
+    if score >= 80:
+        label = "dễ tiếp cận"
+        profile = "phổ thông"
+    elif score >= 60:
+        label = "trung bình"
+        profile = "đại học"
+    else:
+        label = "chuyên sâu"
+        profile = "chuyên môn"
+
+    return {
+        "accessibility_score": score,
+        "accessibility_label": label,
+        "avg_sentence_length_words": round(avg_sentence_len, 1),
+        "long_sentence_ratio": round(long_sentence_ratio, 2),
+        "lexical_diversity": round(lexical_diversity, 2),
+        "recommended_reader_profile": profile,
+        "note": "Chỉ số dựa trên độ dài câu, tỷ lệ câu dài và độ đa dạng từ vựng.",
+    }
+
+
+def _build_claim_checks(paragraphs: list[dict]) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    for p in paragraphs[:6]:
+        text = p["text"].strip()
+        if not text:
+            continue
+        has_number = bool(re.search(r"\b\d+(?:[.,]\d+)?%?\b", text))
+        has_source_hint = bool(
+            re.search(r"\b(theo|nguồn|source|study|research|http|www)\b", text.lower())
+        )
+        if has_source_hint and (has_number or "trích" in text.lower()):
+            support = "supported"
+            evidence = "Có nêu số liệu hoặc dấu hiệu trích nguồn trong chính văn bản."
+        elif has_number:
+            support = "weak"
+            evidence = "Có số liệu nhưng thiếu nguồn/cách đo cụ thể."
+        else:
+            support = "unsupported"
+            evidence = "Không thấy chứng cứ trực tiếp đi kèm phát biểu."
+
+        claim = text[:140] + ("..." if len(text) > 140 else "")
+        checks.append({
+            "paragraph_id": p["id"],
+            "claim": claim,
+            "evidence_in_text": evidence,
+            "support_level": support,
+            "risk_if_believed": (
+                "Có thể chấp nhận kết luận một chiều hoặc sai lệch nếu không kiểm chứng."
+                if support != "supported" else
+                "Rủi ro thấp hơn, nhưng vẫn cần đối chiếu nguồn gốc số liệu."
+            ),
+            "verification_prompt": "Nguồn gốc dữ liệu này là gì, thu thập khi nào, bởi tổ chức nào?",
+        })
+    return checks[:5]
+
+
+def _build_critical_reading_guard(
+    paragraphs: list[dict],
+    diagnostics: list[dict[str, str]],
+    group_bias_level: str,
+    inflammatory_frequency: str,
+) -> dict[str, Any]:
+    all_text = " ".join(p["text"].lower() for p in paragraphs)
+    signals: list[str] = []
+
+    if any(k in all_text for k in ["chắc chắn", "duy nhất", "always", "never"]):
+        signals.append("Khẳng định tuyệt đối, giảm không gian phản biện.")
+    if any(k in all_text for k in ["họ", "chúng ta", "phe", "bọn", "them", "us"]):
+        signals.append("Phân cực 'chúng ta - họ', dễ dẫn dắt cảm xúc nhóm.")
+    if any(d.get("issue_type") == "fear_appeal" for d in diagnostics):
+        signals.append("Kêu gọi nỗi sợ để thuyết phục thay vì lập luận bằng chứng.")
+    if not signals:
+        signals.append("Không thấy tín hiệu thao túng nổi bật, nhưng vẫn cần kiểm chứng nguồn.")
+
+    risk_score = 0
+    if group_bias_level == "high":
+        risk_score += 2
+    elif group_bias_level == "medium":
+        risk_score += 1
+    if inflammatory_frequency.startswith("high"):
+        risk_score += 2
+    elif inflammatory_frequency.startswith("medium"):
+        risk_score += 1
+    if len(diagnostics) >= 4:
+        risk_score += 1
+
+    persuasion_risk = "high" if risk_score >= 4 else "medium" if risk_score >= 2 else "low"
+    return {
+        "persuasion_risk": persuasion_risk,
+        "manipulation_signals": signals[:4],
+        "missing_context_flags": [
+            "Thiếu thông tin đối chiếu từ nguồn độc lập.",
+            "Chưa nêu rõ phạm vi áp dụng của kết luận.",
+        ],
+        "fact_check_actions": [
+            "Tìm tối thiểu 2 nguồn độc lập có dữ liệu cùng chủ đề để so sánh.",
+            "Tách phần 'sự kiện' và 'ý kiến' trước khi rút kết luận.",
+            "Kiểm tra thời điểm dữ liệu để tránh dùng thông tin lỗi thời.",
+        ],
+        "alternative_views": [
+            "Có cách giải thích nào khác cho cùng hiện tượng không?",
+            "Nhóm bị phê phán trong bài có lập luận phản biện nào đáng xem xét?",
+        ],
+        "do_not_conclude_yet": [
+            "Chưa đủ cơ sở để khẳng định nguyên nhân - hệ quả nếu thiếu dữ liệu kiểm chứng.",
+            "Không nên suy rộng từ một vài ví dụ cá biệt sang toàn bộ nhóm.",
+        ],
+    }
+
+
+# ─────────────────────────────────────────────────────────────
 # Mock
 # ─────────────────────────────────────────────────────────────
 
@@ -161,6 +493,8 @@ class MockAIProvider(BaseAIProvider):
 
     async def analyze(self, mode: str, paragraphs: list[dict], language: str = "vi") -> dict[str, Any]:
         await _fake_latency()
+        full_text = " ".join(p["text"] for p in paragraphs)
+        lang_bucket = _detect_language_bucket(full_text)
         para_analyses = [
             {
                 "paragraph_id": p["id"],
@@ -187,16 +521,54 @@ class MockAIProvider(BaseAIProvider):
             "paragraph_analyses": para_analyses,
         }
         if mode == "reader":
+            figures = _extract_figures(paragraphs)
+            argument_flow = _build_argument_flow(paragraphs)
+            inflam_freq, _, _ = _estimate_inflammatory_frequency(paragraphs, lang_bucket)
+            group_bias = _estimate_group_bias(paragraphs, lang_bucket)
+            emotional_tone = _detect_emotional_tone(paragraphs, lang_bucket)
+            diagnostics = _detect_logic_diagnostics(paragraphs, lang_bucket)
+            readability = _compute_readability_metrics(paragraphs)
+            claim_checks = _build_claim_checks(paragraphs)
+            reading_guard = _build_critical_reading_guard(
+                paragraphs=paragraphs,
+                diagnostics=diagnostics,
+                group_bias_level=group_bias,
+                inflammatory_frequency=inflam_freq,
+            )
+
             result["key_takeaways"] = [
                 "Văn bản có cấu trúc mạch lạc.",
                 "Các luận điểm được trình bày tuần tự.",
                 "Kết luận rõ ràng và nhất quán.",
             ]
-            result["reading_difficulty"] = random.choice(["easy", "medium"])
+            result["readability_metrics"] = readability
+            result["claim_checks"] = claim_checks
+            result["critical_reading_guard"] = reading_guard
+            result["reading_difficulty"] = (
+                "easy" if readability["accessibility_score"] >= 80
+                else "medium" if readability["accessibility_score"] >= 60
+                else "hard"
+            )
             result["logic_issues"] = (
                 [{"paragraph_id": paragraphs[0]["id"], "issue": "Thiếu dẫn chứng cụ thể."}]
                 if paragraphs and random.random() > 0.6 else []
             )
+            result["reader_summary_breakdown"] = {
+                "main_points": [p["main_idea"] for p in para_analyses[:4]],
+                "figures": figures or ["Không phát hiện số liệu nổi bật trong văn bản."],
+                "argument_flow": argument_flow,
+            }
+            result["deep_style_analysis"] = {
+                "emotional_tone": emotional_tone,
+                "inflammatory_word_frequency": inflam_freq,
+                "group_bias_level": group_bias,
+                "notes": (
+                    "Tần số ngôn từ kích động và thiên lệch nhóm đang ở mức cần theo dõi."
+                    if group_bias in {"medium", "high"} else
+                    "Văn phong tương đối trung tính, ít dấu hiệu kích động mạnh."
+                ),
+            }
+            result["logic_diagnostics"] = diagnostics
         else:
             result["style_issues"] = [
                 {

@@ -69,6 +69,27 @@ export interface ParagraphAnalysis {
   notes: string;
 }
 
+export interface ReaderSummaryBreakdown {
+  main_points: string[] | null;
+  figures: string[] | null;
+  argument_flow: string[] | null;
+}
+
+export interface DeepStyleAnalysis {
+  emotional_tone: string | null;
+  inflammatory_word_frequency: string | null;
+  group_bias_level: string | null;
+  notes: string | null;
+}
+
+export interface LogicDiagnostic {
+  paragraph_id: string;
+  issue_type: "fallacy" | "conclusion_jump" | "fear_appeal" | "spelling_grammar" | string;
+  description: string;
+  evidence: string | null;
+  severity: "low" | "medium" | "high" | string | null;
+}
+
 export interface AnalysisResult {
   analysis_id: number;
   document_id: string;
@@ -82,7 +103,35 @@ export interface AnalysisResult {
   // reader
   key_takeaways: string[] | null;
   reading_difficulty: string | null;
+  readability_metrics: {
+    accessibility_score: number | null;
+    accessibility_label: string | null;
+    avg_sentence_length_words: number | null;
+    long_sentence_ratio: number | null;
+    lexical_diversity: number | null;
+    recommended_reader_profile: string | null;
+    note: string | null;
+  } | null;
+  claim_checks: {
+    paragraph_id: string;
+    claim: string;
+    evidence_in_text: string | null;
+    support_level: string | null;
+    risk_if_believed: string | null;
+    verification_prompt: string | null;
+  }[] | null;
+  critical_reading_guard: {
+    persuasion_risk: string | null;
+    manipulation_signals: string[] | null;
+    missing_context_flags: string[] | null;
+    fact_check_actions: string[] | null;
+    alternative_views: string[] | null;
+    do_not_conclude_yet: string[] | null;
+  } | null;
   logic_issues: { paragraph_id: string; issue: string }[] | null;
+  reader_summary_breakdown: ReaderSummaryBreakdown | null;
+  deep_style_analysis: DeepStyleAnalysis | null;
+  logic_diagnostics: LogicDiagnostic[] | null;
   // writer
   style_issues: { paragraph_id: string; issue: string; severity: string }[] | null;
   rewrite_suggestions: { paragraph_id: string; original: string; suggestion: string }[] | null;

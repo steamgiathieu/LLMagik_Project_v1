@@ -11,7 +11,7 @@
   align-items: center;
   gap: 16px;
   padding: 20px;
-  background: white;
+  background: var(--bg-surface);
   border-bottom: 1px solid #e5e7eb;
 }
 
@@ -27,13 +27,13 @@
   border-radius: 6px;
   cursor: pointer;
   font-size: 14px;
-  color: #374151;
+  color: var(--text-main);
   transition: all 0.2s;
 }
 
 .btn-back:hover {
   background: #f3f4f6;
-  border-color: #9ca3af;
+  border-color: var(--text-muted);
 }
 
 .history-main {
@@ -61,7 +61,7 @@
 
 .filter-btn:hover {
   background: #e5e7eb;
-  border-color: #9ca3af;
+  border-color: var(--text-muted);
 }
 
 .filter-btn.active {
@@ -76,7 +76,7 @@
   align-items: center;
   justify-content: center;
   height: 300px;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .history-loading p {
@@ -88,7 +88,7 @@
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 16px;
 }
 
@@ -103,7 +103,7 @@
   align-items: flex-start;
   gap: 12px;
   padding: 16px;
-  background: white;
+  background: var(--bg-surface);
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   transition: all 0.2s;
@@ -126,7 +126,7 @@
 .history-content h3 {
   margin: 0;
   font-size: 16px;
-  color: #1f2937;
+  color: var(--text-main);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -135,20 +135,20 @@
 
 .history-doc-title {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-muted);
   font-weight: normal;
 }
 
 .history-timestamp {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .history-meta {
   margin: 8px 0 0;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .btn-view-history {
@@ -186,3 +186,5 @@
     align-self: stretch;
   }
 }
+
+

@@ -14,7 +14,7 @@
 }
 
 .upload-modal {
-  background: white;
+  background: var(--bg-surface);
   border-radius: 12px;
   width: 90%;
   max-width: 500px;
@@ -42,7 +42,7 @@
   border: none;
   font-size: 28px;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--text-muted);
   padding: 0;
   width: 32px;
   height: 32px;
@@ -126,7 +126,7 @@
 
 .upload-file-hint {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-muted);
   margin: 0;
 }
 
@@ -150,3 +150,51 @@
   gap: 12px;
   margin-top: auto;
 }
+
+:root[data-theme="dark"] .upload-modal {
+  background: var(--bg-surface);
+}
+
+:root[data-theme="dark"] .upload-modal-header,
+:root[data-theme="dark"] .upload-tabs {
+  border-color: var(--border-subtle);
+}
+
+:root[data-theme="dark"] .upload-modal-header h2 {
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .btn-close {
+  color: var(--text-muted);
+}
+
+:root[data-theme="dark"] .btn-close:hover {
+  background: #1e293b;
+}
+
+:root[data-theme="dark"] .upload-tabs button {
+  background: #1e293b;
+  color: var(--text-main);
+}
+
+:root[data-theme="dark"] .upload-tabs button:hover {
+  background: #334155;
+}
+
+:root[data-theme="dark"] .upload-textarea,
+:root[data-theme="dark"] .upload-input {
+  background: #0f172a;
+  color: var(--text-main);
+  border-color: var(--border-subtle);
+}
+
+:root[data-theme="dark"] .upload-file-area {
+  background: #0b1220;
+  border-color: var(--border-subtle);
+}
+
+:root[data-theme="dark"] .upload-file-hint {
+  color: var(--text-muted);
+}
+
+

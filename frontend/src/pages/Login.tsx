@@ -61,8 +61,8 @@ export default function Login() {
           </h2>
           <p className="auth-left-desc">
             {t(
-              "Phân tích, tóm tắt, chat và viết lại văn bản với sức mạnh của trí tuệ nhân tạo. Hỗ trợ đa ngôn ngữ.",
-              "Analyze, summarize, chat and rewrite text with AI power. Multilingual support."
+              "Phân tích, tóm tắt, chat và viết lại văn bản với sức mạnh của trí tuệ nhân tạo. Hỗ trợ tiếng Việt và tiếng Anh.",
+              "Analyze, summarize, chat and rewrite text with AI power. Supports Vietnamese and English."
             )}
           </p>
 
@@ -71,7 +71,7 @@ export default function Login() {
               { icon: "🧠", text: t("Phân tích AI chuyên sâu", "Deep AI analysis") },
               { icon: "💬", text: t("Chat trực tiếp với tài liệu", "Chat directly with documents") },
               { icon: "✍️", text: t("Viết lại & cải thiện văn phong", "Rewrite and improve writing style") },
-              { icon: "🌐", text: t("Kết quả đa ngôn ngữ", "Multilingual outputs") },
+              { icon: "🌐", text: t("Kết quả song ngữ Việt-Anh", "Vietnamese-English outputs") },
             ].map((f) => (
               <li key={f.text} className="auth-feature-item">
                 <span className="auth-feature-icon">{f.icon}</span>
@@ -172,9 +172,6 @@ export default function Login() {
                   >
                     <option value="vi">Tiếng Việt</option>
                     <option value="en">English</option>
-                    <option value="zh">中文</option>
-                    <option value="ja">日本語</option>
-                    <option value="fr">Français</option>
                   </select>
                 </div>
 

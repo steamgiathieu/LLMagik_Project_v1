@@ -53,7 +53,25 @@ def _build_response(record: models_analysis.AnalysisResult) -> schemas_analysis.
         # reader
         key_takeaways=result.get("key_takeaways"),
         reading_difficulty=result.get("reading_difficulty"),
+        readability_metrics=_model_or_none(
+            schemas_analysis.ReadabilityMetrics, result.get("readability_metrics")
+        ),
+        claim_checks=_list_model(
+            schemas_analysis.ClaimCheckItem, result.get("claim_checks")
+        ),
+        critical_reading_guard=_model_or_none(
+            schemas_analysis.CriticalReadingGuard, result.get("critical_reading_guard")
+        ),
         logic_issues=_list_model(schemas_analysis.LogicIssue, result.get("logic_issues")),
+        reader_summary_breakdown=_model_or_none(
+            schemas_analysis.ReaderSummaryBreakdown, result.get("reader_summary_breakdown")
+        ),
+        deep_style_analysis=_model_or_none(
+            schemas_analysis.DeepStyleAnalysis, result.get("deep_style_analysis")
+        ),
+        logic_diagnostics=_list_model(
+            schemas_analysis.LogicDiagnostic, result.get("logic_diagnostics")
+        ),
         # writer
         style_issues=_list_model(schemas_analysis.StyleIssue, result.get("style_issues")),
         rewrite_suggestions=_list_model(schemas_analysis.RewriteSuggestion, result.get("rewrite_suggestions")),

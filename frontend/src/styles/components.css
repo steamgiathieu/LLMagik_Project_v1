@@ -86,7 +86,7 @@
 /* ── Cards ── */
 
 .card {
-  background: var(--color-white);
+  background: var(--bg-surface);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
   overflow: hidden;
@@ -150,7 +150,7 @@
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   color: var(--color-gray-900);
-  background: var(--color-white);
+  background: var(--bg-surface);
   transition: var(--transition-base);
   box-sizing: border-box;
 }
@@ -342,3 +342,4 @@
   .show-mobile { display: block; }
   .btn-xl { padding: var(--space-4) var(--space-6); font-size: var(--text-base); }
 }
+
