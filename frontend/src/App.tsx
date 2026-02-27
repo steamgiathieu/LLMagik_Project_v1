@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { authApi, tokenHelper } from "@/api/client";
 import Landing from "./pages/Landing";
@@ -8,25 +8,71 @@ import Home from "./pages/Home";
 import Reader from "./pages/Reader";
 import History from "./pages/History";
 import Profile from "./pages/Profile";
+import Rewrite from "./pages/Rewrite";
 import LanguageSwitcher from "./components/LanguageSwitcher";
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function LoginRouteGate() {
   const { user } = useAuthStore();
-  return user ? <>{children}</> : <Navigate to="/login" />;
+  const location = useLocation();
+
+  if (!user) return <Login />;
+
+  const params = new URLSearchParams(location.search);
+  const next = params.get("next");
+  const safeNext = next && next.startsWith("/") ? next : "/";
+  return <Navigate to={safeNext} replace />;
+}
+
+function ProtectedRoute({
+  children,
+  authReady,
+}: {
+  children: React.ReactNode;
+  authReady: boolean;
+}) {
+  const location = useLocation();
+  const { user, isLoading } = useAuthStore();
+
+  if (!authReady || isLoading) {
+    return (
+      <div style={{ padding: 24, textAlign: "center" }}>
+        Đang khôi phục phiên đăng nhập...
+      </div>
+    );
+  }
+
+  if (!user) {
+    const next = encodeURIComponent(`${location.pathname}${location.search}`);
+    return <Navigate to={`/login?next=${next}`} replace />;
+  }
+
+  return <>{children}</>;
 }
 
 export default function App() {
   const { fetchMe, user, logout } = useAuthStore();
   const initRef = useRef(false);
+  const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
     // Restore session on app load (only once)
     if (!initRef.current) {
       initRef.current = true;
-      // Only fetch user if token exists (user previously logged in)
-      if (tokenHelper.exists()) {
-        fetchMe();
-      }
+
+      const bootstrap = async () => {
+        // Only fetch user if token exists (user previously logged in)
+        if (tokenHelper.exists()) {
+          try {
+            await fetchMe();
+          } finally {
+            setAuthReady(true);
+          }
+          return;
+        }
+        setAuthReady(true);
+      };
+
+      bootstrap();
     }
   }, []); // Empty dependency - run only once on mount
 
@@ -64,11 +110,11 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/landing" element={<Landing />} />
-        <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+        <Route path="/login" element={<LoginRouteGate />} />
         <Route
           path="/"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute authReady={authReady}>
               <Home />
               <LanguageSwitcher />
             </ProtectedRoute>
@@ -77,8 +123,17 @@ export default function App() {
         <Route
           path="/reader/:docId"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute authReady={authReady}>
               <Reader />
+              <LanguageSwitcher />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/rewrite"
+          element={
+            <ProtectedRoute authReady={authReady}>
+              <Rewrite />
               <LanguageSwitcher />
             </ProtectedRoute>
           }
@@ -86,7 +141,7 @@ export default function App() {
         <Route
           path="/history"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute authReady={authReady}>
               <History />
               <LanguageSwitcher />
             </ProtectedRoute>
@@ -95,7 +150,7 @@ export default function App() {
         <Route
           path="/profile"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute authReady={authReady}>
               <Profile />
               <LanguageSwitcher />
             </ProtectedRoute>

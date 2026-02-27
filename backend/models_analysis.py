@@ -10,7 +10,7 @@ class AnalysisResult(Base):
     document_id = Column(String(36), ForeignKey("documents.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     mode = Column(String(20), nullable=False)           # reader | writer
-    ai_provider = Column(String(20), nullable=True)     # mock | openai | anthropic
+    ai_provider = Column(String(20), nullable=True)     # mock | groq
     result = Column(JSON, nullable=False)               # full AI response
     result_summary = Column(Text, nullable=True)        # short human-readable summary
     processing_ms = Column(Integer, nullable=True)      # latency in ms

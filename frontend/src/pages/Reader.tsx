@@ -1,24 +1,38 @@
 // src/pages/Reader.tsx
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useDocumentStore } from "@/store/documentStore";
 import { useAnalysisStore } from "@/store/analysisStore";
 import { useChatStore } from "@/store/chatStore";
 import { ReaderView } from "@/components/Reader";
 import AnalysisPanel from "@/components/AnalysisPanel";
 import ChatBox from "@/components/ChatBox";
+import RewritePanel from "@/components/RewritePanel";
 import "./Reader.css";
 
 export default function Reader() {
   const { docId } = useParams<{ docId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const { currentDocument, selectedParagraphId, fetchDocument, setSelectedParagraph, isLoading } =
     useDocumentStore();
   const { analyze, currentResult, mode, setMode, isAnalyzing } = useAnalysisStore();
   const { startNewSession } = useChatStore();
 
-  const [activeTab, setActiveTab] = useState<"analysis" | "chat">("analysis");
+  const requestedTab = searchParams.get("tab");
+  const defaultTab: "analysis" | "chat" | "rewrite" =
+    requestedTab === "chat" || requestedTab === "rewrite" ? requestedTab : "analysis";
+  const [activeTab, setActiveTab] = useState<"analysis" | "chat" | "rewrite">(defaultTab);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "chat" || tab === "rewrite" || tab === "analysis") {
+      setActiveTab(tab);
+      return;
+    }
+    setActiveTab("analysis");
+  }, [searchParams]);
 
   useEffect(() => {
     if (docId) {
@@ -26,6 +40,13 @@ export default function Reader() {
       startNewSession(); // Reset chat when entering new doc
     }
   }, [docId]);
+
+  useEffect(() => {
+    if (activeTab !== "rewrite") return;
+    if (!currentDocument || currentDocument.paragraphs.length === 0) return;
+    if (selectedParagraphId) return;
+    setSelectedParagraph(currentDocument.paragraphs[0].id);
+  }, [activeTab, currentDocument, selectedParagraphId, setSelectedParagraph]);
 
   const handleAnalyze = async () => {
     if (!currentDocument) return;
@@ -51,6 +72,9 @@ export default function Reader() {
       </div>
     );
   }
+
+  const selectedParagraph =
+    currentDocument.paragraphs.find((p) => p.id === selectedParagraphId) ?? null;
 
   return (
     <div className="reader-page">
@@ -98,6 +122,12 @@ export default function Reader() {
             >
               💬 Chat
             </button>
+            <button
+              className={activeTab === "rewrite" ? "active" : ""}
+              onClick={() => setActiveTab("rewrite")}
+            >
+              ✏️ Viết lại
+            </button>
           </div>
 
           <div className="sidebar-content">
@@ -109,6 +139,19 @@ export default function Reader() {
               />
             )}
             {activeTab === "chat" && <ChatBox documentId={currentDocument.document_id} />}
+            {activeTab === "rewrite" &&
+              (selectedParagraph ? (
+                <RewritePanel
+                  paragraphId={selectedParagraph.id}
+                  originalText={selectedParagraph.text}
+                  documentId={currentDocument.document_id}
+                />
+              ) : (
+                <div className="panel-empty">
+                  <p>Chưa chọn đoạn văn</p>
+                  <p className="hint">Hãy chọn một đoạn ở khung bên trái để viết lại</p>
+                </div>
+              ))}
           </div>
         </aside>
       </div>

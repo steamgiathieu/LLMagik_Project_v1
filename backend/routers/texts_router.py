@@ -52,16 +52,24 @@ def _save_document(
 
 
 def _doc_to_response(doc: models_text.Document) -> schemas_text.DocumentResponse:
+    para_list = [
+        schemas_text.ParagraphOut(id=p.paragraph_id, text=p.text)
+        for p in doc.paragraphs
+    ]
+
+    # Legacy fallback: một số document cũ có raw_text nhưng không có paragraph records.
+    # Trả về tối thiểu 1 paragraph để Reader/Rewrite vẫn dùng được.
+    if not para_list and doc.raw_text and doc.raw_text.strip():
+        fallback_text = doc.raw_text.strip()
+        para_list = [schemas_text.ParagraphOut(id="P1", text=fallback_text)]
+
     return schemas_text.DocumentResponse(
         document_id=doc.id,
         title=doc.title,
         source_type=doc.source_type,
         source_ref=doc.source_ref,
-        paragraph_count=doc.paragraph_count,
-        paragraphs=[
-            schemas_text.ParagraphOut(id=p.paragraph_id, text=p.text)
-            for p in doc.paragraphs
-        ],
+        paragraph_count=max(doc.paragraph_count, len(para_list)),
+        paragraphs=para_list,
         created_at=doc.created_at,
     )
 

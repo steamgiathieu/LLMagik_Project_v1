@@ -16,17 +16,17 @@ NC='\033[0m' # No Color
 
 # Check if backend .env exists
 if [ ! -f "backend/.env" ]; then
-    echo -e "${YELLOW}⚠️  backend/.env not found. Creating from .env.example...${NC}"
-    cp backend/.env.example backend/.env
-    echo -e "${RED}❗ Please edit backend/.env and set SECRET_KEY before continuing!${NC}"
+    echo -e "${RED}❗ backend/.env not found. Please create backend/.env before continuing!${NC}"
+    echo "   Required keys: SECRET_KEY, DATABASE_URL, GROQ_API_KEY"
     echo "   Run: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
     exit 1
 fi
 
 # Check if frontend .env exists
 if [ ! -f "frontend/.env" ]; then
-    echo -e "${YELLOW}⚠️  frontend/.env not found. Creating from .env.example...${NC}"
-    cp frontend/.env.example frontend/.env
+    echo -e "${RED}❗ frontend/.env not found. Please create frontend/.env before continuing!${NC}"
+    echo "   Required key: VITE_API_URL"
+    exit 1
 fi
 
 # Function to cleanup on exit

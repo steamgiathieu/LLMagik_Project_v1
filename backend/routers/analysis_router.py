@@ -117,7 +117,7 @@ async def analyze_document(
         document_id=payload.document_id,
         user_id=current_user.id,
         mode=payload.mode,
-        ai_provider=os.getenv("AI_PROVIDER", "mock"),
+        ai_provider="groq",
         result=ai_result,
         result_summary=result_summary,
         processing_ms=elapsed_ms,

@@ -27,10 +27,10 @@ LLMagik/
 │   │   ├── chat_router.py     # /chat/* (chat, sessions, history)
 │   │   └── history_router.py  # /history/* (all activities, stats)
 │   ├── services/
-│   │   ├── ai_service.py      # AI provider abstraction (Mock/OpenAI/Anthropic)
+│   │   ├── ai_service.py      # AI service (Groq)
 │   │   └── text_processor.py  # Text utilities
 │   ├── requirements.txt
-│   ├── .env.example
+│   ├── .env
 │   └── test_imports.py
 │
 ├── frontend/                   # React + Vite frontend
@@ -67,7 +67,7 @@ LLMagik/
 │   ├── package.json
 │   ├── tsconfig.json
 │   ├── vite.config.ts
-│   ├── .env.example
+│   ├── .env
 │   └── public/
 │
 ├── start.sh                   # Bash startup script (Linux/Mac)
@@ -114,9 +114,8 @@ pip install -r requirements.txt
 # Generate SECRET_KEY
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 
-# Configure .env
-cp .env.example .env
-# Edit .env and paste the generated SECRET_KEY
+# Configure backend/.env
+# Edit backend/.env and paste SECRET_KEY + GROQ_API_KEY
 
 # Run backend
 uvicorn main:app --reload --port 8000
@@ -129,8 +128,7 @@ cd frontend
 # Install dependencies
 npm install
 
-# Create .env if not exists
-cp .env.example .env
+# Configure frontend/.env
 # VITE_API_URL should be http://localhost:8000
 
 # Run dev server
@@ -209,6 +207,22 @@ chmod +x deploy.sh
 - `GET /history/stats` - User statistics
 
 **Total: 26+ API endpoints**
+
+---
+
+## 🤖 AI Provider Setup (Rewrite thực tế)
+
+Hệ thống dùng **Groq** cho AI features (analyze/rewrite/chat):
+
+1. Tạo API key tại: `https://console.groq.com/keys`
+2. Sửa `backend/.env`:
+
+```env
+GROQ_API_KEY=your-groq-key
+GROQ_MODEL=llama-3.1-8b-instant
+```
+
+Khi đã cấu hình key, endpoint `POST /rewrite/` sẽ trả kết quả viết lại thực tế bằng Groq.
 
 ---
 
@@ -450,7 +464,7 @@ Test all endpoints in Swagger UI: http://localhost:8000/docs
 
 1. **[Setup & Run](README.md#-quick-start)** - Start both servers
 2. **[Test Application](DEBUGGING_GUIDE.md#-next-steps---testing--validation)** - Validate all features  
-3. **[Configure AI](backend/.env.example)** - Set real AI provider
+3. **Configure AI in [`backend/.env`](backend/.env)** - Set `GROQ_API_KEY`
 4. **[Deploy to Production](backend/SETUP_GUIDE.md#deployment)** - Go live
 
 ---

@@ -55,9 +55,9 @@ Write-Host "`n" -ForegroundColor Green
 Write-Host "📋 Next Steps:`n" -ForegroundColor Yellow
 
 Write-Host "1️⃣  Update GitHub configuration:" -ForegroundColor Green
-Write-Host "   - Edit frontend/.env.production" -ForegroundColor Cyan
-Write-Host "   - Change USERNAME to your GitHub username" -ForegroundColor Cyan
-Write-Host "   - Change VITE_API_URL to your backend URL" -ForegroundColor Cyan
+Write-Host "   - Edit frontend/.env" -ForegroundColor Cyan
+Write-Host "   - Set VITE_API_URL to your backend URL" -ForegroundColor Cyan
+Write-Host "   - Set VITE_BASE_URL to your deploy base path (e.g. /LLMagik/)" -ForegroundColor Cyan
 
 Write-Host "`n2️⃣  Push to GitHub:" -ForegroundColor Green
 Write-Host "   git add ." -ForegroundColor Cyan

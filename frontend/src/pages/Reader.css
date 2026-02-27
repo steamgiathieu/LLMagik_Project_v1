@@ -172,6 +172,18 @@
   margin: 0;
 }
 
+.panel-empty {
+  text-align: center;
+  color: #6b7280;
+  padding: 2rem 1rem;
+}
+
+.panel-empty .hint {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
 .loading-spinner {
   display: flex;
   justify-content: center;

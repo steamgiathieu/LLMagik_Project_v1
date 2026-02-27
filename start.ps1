@@ -25,17 +25,17 @@ try {
 
 # Check backend .env
 if (-not (Test-Path "backend\.env")) {
-    Write-Host "⚠️  backend\.env not found. Creating from .env.example..." -ForegroundColor Yellow
-    Copy-Item "backend\.env.example" "backend\.env"
-    Write-Host "❗ Please edit backend\.env and set SECRET_KEY!" -ForegroundColor Red
+    Write-Host "❗ backend\.env not found. Please create backend\.env" -ForegroundColor Red
+    Write-Host "   Required keys: SECRET_KEY, DATABASE_URL, GROQ_API_KEY" -ForegroundColor Yellow
     Write-Host "   Generate with: python -c `"import secrets; print(secrets.token_urlsafe(32))`""
     exit 1
 }
 
 # Check frontend .env
 if (-not (Test-Path "frontend\.env")) {
-    Write-Host "⚠️  frontend\.env not found. Creating from .env.example..." -ForegroundColor Yellow
-    Copy-Item "frontend\.env.example" "frontend\.env"
+    Write-Host "❗ frontend\.env not found. Please create frontend\.env" -ForegroundColor Red
+    Write-Host "   Required key: VITE_API_URL" -ForegroundColor Yellow
+    exit 1
 }
 
 Write-Host "`n📦 Setting up Backend...`n" -ForegroundColor Green

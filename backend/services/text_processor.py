@@ -186,6 +186,11 @@ def process_input(
         raise ValueError(f"source_type không hợp lệ: {source_type}")
 
     paragraphs = split_paragraphs(raw)
+    # Fallback cho văn bản ngắn: vẫn tạo 1 paragraph để các tính năng
+    # Reader/Rewrite hoạt động thay vì trả document rỗng paragraph.
+    if not paragraphs and raw.strip():
+        paragraphs = [raw.strip()]
+
     return {
         "raw_text": raw,
         "title": title,

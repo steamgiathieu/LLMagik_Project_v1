@@ -1,12 +1,12 @@
 // src/components/RewritePanel.tsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { rewriteApi } from "@/api/client";
 import "./RewritePanel.css";
 
 interface RewritePanelProps {
   paragraphId: string;
   originalText: string;
-  documentId: string;
+  documentId?: string;
 }
 
 export default function RewritePanel({
@@ -19,8 +19,10 @@ export default function RewritePanel({
   const [explanation, setExplanation] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [presets, setPresets] = useState<string[]>([]);
 
-  const PRESET_GOALS = [
+  const FALLBACK_PRESET_GOALS = [
     "trung lập hơn",
     "rõ ràng và súc tích hơn",
     "trang trọng và chuyên nghiệp hơn",
@@ -28,6 +30,42 @@ export default function RewritePanel({
     "ngắn gọn hơn",
     "chi tiết và mở rộng hơn",
   ];
+
+  useEffect(() => {
+    let mounted = true;
+    rewriteApi
+      .presets()
+      .then((items) => {
+        if (mounted && Array.isArray(items) && items.length > 0) {
+          setPresets(items);
+        }
+      })
+      .catch(() => {
+        // Keep fallback presets silently
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setRewritten("");
+    setExplanation("");
+    setError("");
+    setCopied(false);
+  }, [paragraphId, originalText]);
+
+  const handleCopy = async () => {
+    if (!rewritten) return;
+    try {
+      await navigator.clipboard.writeText(rewritten);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError("Không thể copy nội dung vào clipboard");
+    }
+  };
 
   const handleRewrite = async () => {
     if (!goal.trim()) {
@@ -58,6 +96,7 @@ export default function RewritePanel({
   return (
     <div className="rewrite-panel">
       <h3>✏️ Viết lại đoạn văn</h3>
+      <p className="rewrite-subtitle">Đoạn đang chọn: <strong>{paragraphId}</strong></p>
 
       <div className="rewrite-section">
         <label>Mục tiêu viết lại</label>
@@ -71,7 +110,7 @@ export default function RewritePanel({
         />
 
         <div className="rewrite-presets">
-          {PRESET_GOALS.map((preset) => (
+          {(presets.length > 0 ? presets : FALLBACK_PRESET_GOALS).map((preset) => (
             <button
               key={preset}
               onClick={() => setGoal(preset)}
@@ -93,7 +132,12 @@ export default function RewritePanel({
 
       {rewritten && (
         <div className="rewrite-section">
-          <label>Đoạn được viết lại</label>
+          <div className="rewrite-result-header">
+            <label>Đoạn được viết lại</label>
+            <button type="button" className="btn-copy" onClick={handleCopy}>
+              {copied ? "✅ Đã copy" : "📋 Copy"}
+            </button>
+          </div>
           <div className="rewrite-result">
             <p>{rewritten}</p>
           </div>

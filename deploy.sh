@@ -56,9 +56,9 @@ echo ""
 echo -e "📋 Next Steps:\n"
 
 echo "1️⃣  Update GitHub configuration:"
-echo "   - Edit frontend/.env.production"
-echo "   - Change USERNAME to your GitHub username"
-echo "   - Change VITE_API_URL to your backend URL"
+echo "   - Edit frontend/.env"
+echo "   - Set VITE_API_URL to your backend URL"
+echo "   - Set VITE_BASE_URL to your deploy base path (e.g. /LLMagik/)"
 
 echo -e "\n2️⃣  Push to GitHub:"
 echo "   git add ."

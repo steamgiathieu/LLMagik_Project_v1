@@ -11,6 +11,12 @@ export default function Home() {
   const { user, profile, logout } = useAuthStore();
   const { documents, fetchDocuments, deleteDocument, isLoading } = useDocumentStore();
   const [showUpload, setShowUpload] = useState(false);
+  const [uploadForRewrite, setUploadForRewrite] = useState(false);
+
+  const openUpload = (forRewrite = false) => {
+    setUploadForRewrite(forRewrite);
+    setShowUpload(true);
+  };
 
   useEffect(() => {
     fetchDocuments();
@@ -97,7 +103,7 @@ export default function Home() {
           </div>
           <div className="dashboard-welcome-actions">
             <button
-              onClick={() => setShowUpload(true)}
+              onClick={() => openUpload(false)}
               className="dashboard-action-btn dashboard-action-primary"
             >
               <span className="dashboard-action-icon">📄</span>
@@ -116,7 +122,7 @@ export default function Home() {
           <div className="dashboard-actions-grid">
             <button
               className="dashboard-feature-card"
-              onClick={() => setShowUpload(true)}
+              onClick={() => openUpload(false)}
             >
               <div className="dashboard-feature-icon">🧠</div>
               <h3>Phân tích AI</h3>
@@ -140,7 +146,9 @@ export default function Home() {
 
             <button
               className="dashboard-feature-card"
-              onClick={() => navigate("/rewrite")}
+              onClick={() => {
+                navigate("/rewrite");
+              }}
             >
               <div className="dashboard-feature-icon">✍️</div>
               <h3>Viết lại</h3>
@@ -169,7 +177,7 @@ export default function Home() {
           <div className="dashboard-documents-header">
             <h2 className="dashboard-section-title">📄 Tài liệu gần đây</h2>
             <button
-              onClick={() => setShowUpload(true)}
+              onClick={() => openUpload(false)}
               className="dashboard-add-btn"
             >
               + Thêm mới
@@ -188,7 +196,7 @@ export default function Home() {
               <div className="dashboard-empty-icon">📭</div>
               <h3>Chưa có tài liệu nào</h3>
               <p>Upload tài liệu đầu tiên để bắt đầu phân tích với AI</p>
-              <button onClick={() => setShowUpload(true)} className="dashboard-empty-btn">
+              <button onClick={() => openUpload(false)} className="dashboard-empty-btn">
                 Upload tài liệu
               </button>
             </div>
@@ -277,10 +285,14 @@ export default function Home() {
 
       {showUpload && (
         <UploadModal
-          onClose={() => setShowUpload(false)}
+          onClose={() => {
+            setShowUpload(false);
+            setUploadForRewrite(false);
+          }}
           onSuccess={(docId) => {
             setShowUpload(false);
-            navigate(`/reader/${docId}`);
+            navigate(uploadForRewrite ? `/reader/${docId}?tab=rewrite` : `/reader/${docId}`);
+            setUploadForRewrite(false);
           }}
         />
       )}

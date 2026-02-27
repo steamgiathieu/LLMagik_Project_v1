@@ -17,6 +17,12 @@
   color: #1f2937;
 }
 
+.rewrite-subtitle {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
 .rewrite-section {
   display: flex;
   flex-direction: column;
@@ -27,6 +33,13 @@
   font-size: 14px;
   font-weight: 500;
   color: #374151;
+}
+
+.rewrite-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .rewrite-textarea {
@@ -118,6 +131,20 @@
   border-radius: 6px;
   color: #991b1b;
   font-size: 14px;
+}
+
+.btn-copy {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.btn-copy:hover {
+  background: #f9fafb;
 }
 
 .btn-rewrite {

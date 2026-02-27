@@ -1,3 +1,6 @@
+import json
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -33,9 +36,39 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+def _load_cors_origins() -> list[str]:
+    """
+    Load CORS origins from env (JSON array) with safe fallback.
+    Supports:
+      CORS_ORIGINS=["http://localhost:5173", "http://localhost:3000"]
+    """
+    raw = os.getenv("CORS_ORIGINS", "").strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                origins = [str(x).strip() for x in parsed if str(x).strip()]
+                if origins:
+                    return origins
+        except Exception:
+            pass
+
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
+
+cors_origins = _load_cors_origins()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=cors_origins,
+    # Keep localhost dev resilient even when port changes
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,  # Enable credentials (cookies)
     allow_methods=["*"],
     allow_headers=["*"],
