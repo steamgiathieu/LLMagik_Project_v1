@@ -7,7 +7,7 @@ from datetime import datetime
 
 class ChatRequest(BaseModel):
     document_id: str = Field(..., examples=["uuid-string"])
-    user_question: str = Field(..., min_length=3, max_length=1000, examples=["Ý chính của văn bản là gì?"])
+    user_question: str = Field(..., min_length=1, max_length=1000, examples=["Ý chính của văn bản là gì?"])
     session_id: Optional[int] = Field(
         None,
         description="Tiếp tục session cũ. Bỏ trống để tạo session mới.",

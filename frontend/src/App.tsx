@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { authApi, tokenHelper } from "@/api/client";
+import { applyTheme, getStoredLanguage, getStoredTheme, normalizeLanguage, saveLanguage } from "@/lib/uiPreferences";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
@@ -16,7 +17,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { fetchMe, user, logout } = useAuthStore();
+  const { fetchMe, user, profile, logout } = useAuthStore();
   const initRef = useRef(false);
 
   useEffect(() => {
@@ -29,6 +30,17 @@ export default function App() {
       }
     }
   }, []); // Empty dependency - run only once on mount
+
+  useEffect(() => {
+    const theme = getStoredTheme();
+    applyTheme(theme);
+  }, []);
+
+  useEffect(() => {
+    const language = normalizeLanguage(profile?.language || user?.language || getStoredLanguage());
+    saveLanguage(language);
+    document.documentElement.lang = language;
+  }, [profile?.language, user?.language]);
 
   useEffect(() => {
     // Auto-refresh token every 25 minutes (token expires in 30 minutes)

@@ -33,6 +33,29 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # Supported languages
 SUPPORTED_LANGUAGES = {"vi", "en", "zh", "ja", "fr"}
+SUPPORTED_ROLES = {"reader", "writer", "both"}
+SUPPORTED_AGE_GROUPS = {"teen", "adult", "senior"}
+
+
+def _normalize_language(value: Optional[str], default: str = "vi") -> str:
+    if not value:
+        return default
+    code = value.strip().lower()
+    return code if code in SUPPORTED_LANGUAGES else default
+
+
+def _normalize_role(value: Optional[str], default: str = "reader") -> str:
+    if not value:
+        return default
+    role = value.strip().lower()
+    return role if role in SUPPORTED_ROLES else default
+
+
+def _normalize_age_group(value: Optional[str], default: str = "adult") -> str:
+    if not value:
+        return default
+    age_group = value.strip().lower()
+    return age_group if age_group in SUPPORTED_AGE_GROUPS else default
 
 class RegisterRequest(BaseModel):
     """Yêu cầu đăng ký."""
@@ -111,10 +134,10 @@ class UserWithProfileResponse(BaseModel):
 
 class UpdateProfileRequest(BaseModel):
     """Cập nhật profile."""
-    nickname: str = Field(None, min_length=1, max_length=100)
-    language: str = Field(None, min_length=2, max_length=10)
-    role: str = Field(None)
-    age_group: str = Field(None)
+    nickname: Optional[str] = Field(None, min_length=1, max_length=100)
+    language: Optional[str] = Field(None, min_length=2, max_length=10)
+    role: Optional[str] = Field(None)
+    age_group: Optional[str] = Field(None)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -167,11 +190,8 @@ def register(
     db.add(user)
     db.flush()
 
-    # Validate language
-    lang = payload.language if payload.language in SUPPORTED_LANGUAGES else "vi"
-
-    # Validate age group
-    age_group = payload.age_group if payload.age_group in {"teen", "adult", "senior"} else "adult"
+    lang = _normalize_language(payload.language)
+    age_group = _normalize_age_group(payload.age_group)
 
     # Create user profile
     profile = models.UserProfile(
@@ -375,13 +395,13 @@ def update_profile(
         current_user.nickname = payload.nickname
 
     if payload.language is not None:
-        profile.language = payload.language
+        profile.language = _normalize_language(payload.language, profile.language or "vi")
 
     if payload.role is not None:
-        profile.role = payload.role
+        profile.role = _normalize_role(payload.role, profile.role or "reader")
 
     if payload.age_group is not None:
-        profile.age_group = payload.age_group
+        profile.age_group = _normalize_age_group(payload.age_group, profile.age_group or "adult")
 
     db.commit()
     db.refresh(current_user)

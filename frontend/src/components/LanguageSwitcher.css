@@ -52,6 +52,19 @@
   animation: slideUp 0.2s ease-out;
 }
 
+.language-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 6px 10px;
+}
+
+.theme-title {
+  margin-top: 8px;
+}
+
 @keyframes slideUp {
   from {
     opacity: 0;
@@ -101,6 +114,27 @@
   font-size: var(--text-sm);
   color: var(--color-primary);
   font-weight: var(--font-bold);
+}
+
+.theme-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 4px 8px 8px;
+}
+
+.theme-option {
+  border: 1px solid var(--color-gray-200);
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  padding: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.theme-option.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 /* Responsive */

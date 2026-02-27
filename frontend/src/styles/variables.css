@@ -118,6 +118,31 @@
 
   --navbar-height: 64px;
   --sidebar-width: 280px;
+
+  /* Theme tokens */
+  --bg-page: var(--color-gray-50);
+  --bg-surface: var(--color-white);
+  --text-main: var(--color-gray-800);
+  --text-muted: var(--color-gray-500);
+  --border-subtle: var(--color-gray-200);
 }
 
 /* Keep a stable light palette across OS themes to avoid low-contrast text on white surfaces. */
+
+:root[data-theme="dark"] {
+  --bg-page: #0b1220;
+  --bg-surface: #111827;
+  --text-main: #e5e7eb;
+  --text-muted: #94a3b8;
+  --border-subtle: #334155;
+  --color-white: #111827;
+  --color-gray-50: #0b1220;
+  --color-gray-100: #111827;
+  --color-gray-200: #1f2937;
+  --color-gray-300: #334155;
+  --color-gray-400: #64748b;
+  --color-gray-500: #94a3b8;
+  --color-gray-600: #cbd5e1;
+  --color-gray-700: #e2e8f0;
+  --color-gray-800: #f3f4f6;
+}

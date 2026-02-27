@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useHistoryStore } from "@/store/historyStore";
 import { useAuthStore } from "@/store/authStore";
+import { useUiPreferences } from "@/lib/uiPreferences";
 import "./History.css";
 
 export default function History() {
   const navigate = useNavigate();
   useAuthStore();
+  const { t, dateLocale } = useUiPreferences();
   const { entries, isLoading, fetchHistory, filter, setFilter } = useHistoryStore();
   const [filteredEntries, setFilteredEntries] = useState(entries);
 
@@ -39,13 +41,13 @@ export default function History() {
   const getActivityLabel = (type: string) => {
     switch (type) {
       case "analysis":
-        return "Phân tích";
+        return t("Phân tích", "Analysis");
       case "rewrite":
-        return "Viết lại";
+        return t("Viết lại", "Rewrite");
       case "chat":
         return "Chat";
       default:
-        return "Hoạt động";
+        return t("Hoạt động", "Activity");
     }
   };
 
@@ -53,9 +55,9 @@ export default function History() {
     <div className="history-page">
       <header className="history-header">
         <button onClick={() => navigate("/")} className="btn-back">
-          ← Về trang chủ
+          ← {t("Về trang chủ", "Back home")}
         </button>
-        <h1>Lịch sử hoạt động</h1>
+        <h1>{t("Lịch sử hoạt động", "Activity history")}</h1>
       </header>
 
       <main className="history-main">
@@ -64,19 +66,19 @@ export default function History() {
             className={filter === "all" ? "filter-btn active" : "filter-btn"}
             onClick={() => setFilter("all")}
           >
-            Tất cả
+            {t("Tất cả", "All")}
           </button>
           <button
             className={filter === "analysis" ? "filter-btn active" : "filter-btn"}
             onClick={() => setFilter("analysis")}
           >
-            📊 Phân tích
+            📊 {t("Phân tích", "Analysis")}
           </button>
           <button
             className={filter === "rewrite" ? "filter-btn active" : "filter-btn"}
             onClick={() => setFilter("rewrite")}
           >
-            ✏️ Viết lại
+            ✏️ {t("Viết lại", "Rewrite")}
           </button>
           <button
             className={filter === "chat" ? "filter-btn active" : "filter-btn"}
@@ -89,13 +91,13 @@ export default function History() {
         {isLoading && (
           <div className="history-loading">
             <div className="spinner" />
-            <p>Đang tải lịch sử...</p>
+            <p>{t("Đang tải lịch sử...", "Loading history...")}</p>
           </div>
         )}
 
         {!isLoading && filteredEntries.length === 0 && (
           <div className="history-empty">
-            <p>Chưa có hoạt động nào</p>
+            <p>{t("Chưa có hoạt động nào", "No activity yet")}</p>
           </div>
         )}
 
@@ -115,23 +117,23 @@ export default function History() {
                   )}
                 </h3>
                 <p className="history-timestamp">
-                  {new Date(entry.timestamp).toLocaleString("vi-VN")}
+                  {new Date(entry.timestamp).toLocaleString(dateLocale)}
                 </p>
 
                 {/* Show additional data based on activity type */}
                 {entry.activity_type === "analysis" && entry.data.mode && (
                   <p className="history-meta">
-                    Chế độ: {entry.data.mode === "reader" ? "Người đọc" : "Người viết"}
+                    {t("Chế độ", "Mode")}: {entry.data.mode === "reader" ? t("Người đọc", "Reader") : t("Người viết", "Writer")}
                   </p>
                 )}
 
                 {entry.activity_type === "rewrite" && entry.data.goal && (
-                  <p className="history-meta">Mục tiêu: {entry.data.goal}</p>
+                  <p className="history-meta">{t("Mục tiêu", "Goal")}: {entry.data.goal}</p>
                 )}
 
                 {entry.activity_type === "chat" && (
                   <p className="history-meta">
-                    {entry.data.message_count || 0} tin nhắn
+                    {entry.data.message_count || 0} {t("tin nhắn", "messages")}
                   </p>
                 )}
               </div>
@@ -144,7 +146,7 @@ export default function History() {
                   }
                 }}
               >
-                Xem
+                {t("Xem", "View")}
               </button>
             </div>
           ))}

@@ -1,6 +1,7 @@
 // src/components/UploadModal.tsx
 import { useState } from "react";
 import { textsApi } from "@/api/client";
+import { useUiPreferences } from "@/lib/uiPreferences";
 import "./UploadModal.css";
 
 interface UploadModalProps {
@@ -9,6 +10,7 @@ interface UploadModalProps {
 }
 
 export default function UploadModal({ onClose, onSuccess }: UploadModalProps) {
+  const { t } = useUiPreferences();
   const [mode, setMode] = useState<"text" | "url" | "file">("text");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -32,24 +34,24 @@ export default function UploadModal({ onClose, onSuccess }: UploadModalProps) {
 
       if (mode === "text") {
         if (!text.trim()) {
-          throw new Error("Vui lòng nhập văn bản");
+          throw new Error(t("Vui lòng nhập văn bản", "Please enter text"));
         }
         response = await textsApi.uploadText({ text });
       } else if (mode === "url") {
         if (!url.trim()) {
-          throw new Error("Vui lòng nhập URL");
+          throw new Error(t("Vui lòng nhập URL", "Please enter a URL"));
         }
         response = await textsApi.uploadUrl({ url });
       } else if (mode === "file") {
         if (!file) {
-          throw new Error("Vui lòng chọn file");
+          throw new Error(t("Vui lòng chọn file", "Please choose a file"));
         }
         response = await textsApi.uploadFile(file);
       }
 
       onSuccess(response.document_id);
     } catch (err: any) {
-      setError(err.message || "Có lỗi xảy ra");
+      setError(err.message || t("Có lỗi xảy ra", "Something went wrong"));
     } finally {
       setLoading(false);
     }
@@ -59,7 +61,7 @@ export default function UploadModal({ onClose, onSuccess }: UploadModalProps) {
     <div className="upload-modal-overlay" onClick={onClose}>
       <div className="upload-modal" onClick={(e) => e.stopPropagation()}>
         <header className="upload-modal-header">
-          <h2>Upload Văn bản</h2>
+          <h2>{t("Upload Văn bản", "Upload content")}</h2>
           <button className="btn-close" onClick={onClose}>
             ×
           </button>
@@ -70,7 +72,7 @@ export default function UploadModal({ onClose, onSuccess }: UploadModalProps) {
             className={mode === "text" ? "active" : ""}
             onClick={() => setMode("text")}
           >
-            📝 Văn bản
+            📝 {t("Văn bản", "Text")}
           </button>
           <button
             className={mode === "url" ? "active" : ""}
@@ -82,14 +84,14 @@ export default function UploadModal({ onClose, onSuccess }: UploadModalProps) {
             className={mode === "file" ? "active" : ""}
             onClick={() => setMode("file")}
           >
-            📄 File
+            📄 {t("Tệp", "File")}
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="upload-form">
           {mode === "text" && (
             <textarea
-              placeholder="Dán văn bản của bạn tại đây..."
+              placeholder={t("Dán văn bản của bạn tại đây...", "Paste your text here...")}
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={6}
@@ -115,7 +117,7 @@ export default function UploadModal({ onClose, onSuccess }: UploadModalProps) {
                 onChange={(e) => setFile(e.currentTarget.files?.[0] || null)}
                 className="upload-file-input"
               />
-              <p className="upload-file-hint">Hỗ trợ: PDF, DOCX (tối đa 10MB)</p>
+              <p className="upload-file-hint">{t("Hỗ trợ: PDF, DOCX (tối đa 10MB)", "Supported: PDF, DOCX (max 10MB)")}</p>
               {file && <p className="upload-file-name">✓ {file.name}</p>}
             </div>
           )}
@@ -124,10 +126,10 @@ export default function UploadModal({ onClose, onSuccess }: UploadModalProps) {
 
           <div className="upload-actions">
             <button type="button" onClick={onClose} className="btn-secondary">
-              Hủy
+              {t("Hủy", "Cancel")}
             </button>
             <button type="submit" disabled={loading} className="btn-primary">
-              {loading ? "Đang xử lý..." : "Upload"}
+              {loading ? t("Đang xử lý...", "Processing...") : t("Upload", "Upload")}
             </button>
           </div>
         </form>

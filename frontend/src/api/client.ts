@@ -12,7 +12,7 @@ export interface User {
   username: string;
   email: string;
   nickname: string;
-  language: string;
+  language?: string;
   created_at: string;
 }
 

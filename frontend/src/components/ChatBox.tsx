@@ -37,7 +37,7 @@ export default function ChatBox({ documentId }: ChatBoxProps) {
       <div className="chat-messages">
         {messages.length === 0 && (
           <div className="chat-empty">
-            <p>💬 Hỏi AI về nội dung tài liệu</p>
+            <p>💬 Hỏi về tài liệu hoặc nhắn chào để bắt đầu</p>
           </div>
         )}
 
@@ -90,7 +90,7 @@ export default function ChatBox({ documentId }: ChatBoxProps) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="Hỏi AI về tài liệu..."
+          placeholder="Hỏi về tài liệu hoặc nhắn 'hello'..."
           rows={2}
           disabled={isLoading}
             className="chat-textarea"

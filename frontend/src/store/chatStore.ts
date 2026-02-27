@@ -15,7 +15,7 @@ interface ChatState {
   clearError: () => void;
 }
 
-export const useChatStore = create<ChatState>((set) => ({
+export const useChatStore = create<ChatState>((set, get) => ({
   sessionId: null,
   messages: [],
   isLoading: false,
@@ -36,10 +36,11 @@ export const useChatStore = create<ChatState>((set) => ({
   sendMessage: async (docId: string, question: string) => {
     set({ isLoading: true, error: null });
     try {
+      const currentSessionId = get().sessionId;
       const response = await chatApi.chat({
         document_id: docId,
         user_question: question,
-        session_id: null,
+        session_id: currentSessionId,
       });
 
       // Add user message

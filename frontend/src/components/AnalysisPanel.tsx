@@ -29,7 +29,7 @@ export default function AnalysisPanel({
       <div className="analysis-panel">
         <div className="panel-empty">
           <p>Chưa có kết quả phân tích</p>
-          <p className="hint">Chọn chế độ và nhấn "Phân tích" để bắt đầu</p>
+          <p className="hint">Hệ thống đang chuẩn bị hoặc chưa đủ dữ liệu để hiển thị phân tích</p>
         </div>
       </div>
     );
@@ -55,7 +55,7 @@ export default function AnalysisPanel({
           <section className="panel-section">
             <h3>🎨 Giọng văn</h3>
             <p>
-              <strong>Tổn thể:</strong> {result.tone_analysis.overall_tone}
+              <strong>Tổng thể:</strong> {result.tone_analysis.overall_tone}
             </p>
             <p>
               <strong>Cảm xúc:</strong> {result.tone_analysis.sentiment}

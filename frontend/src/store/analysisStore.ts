@@ -24,7 +24,7 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
   history: [],
 
   analyze: async (docId: string, mode: "reader" | "writer", paragraphs: Paragraph[]) => {
-    set({ isAnalyzing: true, error: null });
+    set({ isAnalyzing: true, error: null, currentResult: null });
     try {
       const result = await analysisApi.analyze({
         document_id: docId,

@@ -4,12 +4,14 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import { useDocumentStore } from "@/store/documentStore";
 import UploadModal from "@/components/UploadModal";
+import { useUiPreferences } from "@/lib/uiPreferences";
 import "./Home.css";
 
 export default function Home() {
   const navigate = useNavigate();
   const { user, profile, logout } = useAuthStore();
   const { documents, fetchDocuments, deleteDocument, isLoading } = useDocumentStore();
+  const { t, dateLocale } = useUiPreferences();
   const [showUpload, setShowUpload] = useState(false);
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export default function Home() {
 
   const handleDelete = async (e: React.MouseEvent, docId: string) => {
     e.stopPropagation();
-    if (confirm("Xóa tài liệu này?")) {
+    if (confirm(t("Xóa tài liệu này?", "Delete this document?"))) {
       await deleteDocument(docId);
     }
   };
@@ -59,9 +61,9 @@ export default function Home() {
           <button
             onClick={() => navigate("/history")}
             className="dashboard-header-btn"
-            title="Lịch sử hoạt động"
+            title={t("Lịch sử hoạt động", "Activity history")}
           >
-            <span>📊</span> Lịch sử
+            <span>📊</span> {t("Lịch sử", "History")}
           </button>
           <button
             onClick={() => navigate("/profile")}
@@ -77,7 +79,7 @@ export default function Home() {
               </span>
             </div>
           </button>
-          <button onClick={handleLogout} className="dashboard-logout-btn" title="Đăng xuất">
+          <button onClick={handleLogout} className="dashboard-logout-btn" title={t("Đăng xuất", "Sign out")}>
             <span>🚪</span>
           </button>
         </div>
@@ -89,10 +91,13 @@ export default function Home() {
         <section className="dashboard-welcome">
           <div className="dashboard-welcome-content">
             <h1 className="dashboard-welcome-title">
-              Chào {user?.nickname} 👋
+              {t("Chào", "Hello")} {user?.nickname} 👋
             </h1>
             <p className="dashboard-welcome-subtitle">
-              Sẵn sàng phân tích văn bản với AI? Hãy chọn một tính năng bên dưới để bắt đầu.
+              {t(
+                "Sẵn sàng phân tích văn bản với AI? Hãy chọn một tính năng bên dưới để bắt đầu.",
+                "Ready to analyze text with AI? Pick a feature below to begin."
+              )}
             </p>
           </div>
           <div className="dashboard-welcome-actions">
@@ -102,8 +107,8 @@ export default function Home() {
             >
               <span className="dashboard-action-icon">📄</span>
               <span className="dashboard-action-text">
-                <strong>Upload tài liệu</strong>
-                <small>Phân tích ngay</small>
+                <strong>{t("Upload tài liệu", "Upload document")}</strong>
+                <small>{t("Phân tích ngay", "Analyze now")}</small>
               </span>
               <span className="dashboard-action-arrow">→</span>
             </button>
@@ -112,17 +117,17 @@ export default function Home() {
 
         {/* Quick Actions Grid */}
         <section className="dashboard-actions">
-          <h2 className="dashboard-section-title">🚀 Khám phá tính năng</h2>
+          <h2 className="dashboard-section-title">🚀 {t("Khám phá tính năng", "Explore features")}</h2>
           <div className="dashboard-actions-grid">
             <button
               className="dashboard-feature-card"
               onClick={() => setShowUpload(true)}
             >
               <div className="dashboard-feature-icon">🧠</div>
-              <h3>Phân tích AI</h3>
-              <p>Phân tích chuyên sâu nội dung, trích xuất thông tin quan trọng</p>
+              <h3>{t("Phân tích AI", "AI Analysis")}</h3>
+              <p>{t("Phân tích chuyên sâu nội dung, trích xuất thông tin quan trọng", "Deeply analyze content and extract key information")}</p>
               <span className="dashboard-feature-link">
-                Bắt đầu <span className="dashboard-feature-arrow">→</span>
+                {t("Bắt đầu", "Start")} <span className="dashboard-feature-arrow">→</span>
               </span>
             </button>
 
@@ -131,10 +136,10 @@ export default function Home() {
               onClick={() => navigate("/chat")}
             >
               <div className="dashboard-feature-icon">💬</div>
-              <h3>Chat với AI</h3>
-              <p>Trò chuyện trực tiếp với tài liệu, hỏi đáp thông minh</p>
+              <h3>{t("Chat với AI", "Chat with AI")}</h3>
+              <p>{t("Trò chuyện trực tiếp với tài liệu, hỏi đáp thông minh", "Talk directly with documents and ask smart questions")}</p>
               <span className="dashboard-feature-link">
-                Mở chat <span className="dashboard-feature-arrow">→</span>
+                {t("Mở chat", "Open chat")} <span className="dashboard-feature-arrow">→</span>
               </span>
             </button>
 
@@ -143,10 +148,10 @@ export default function Home() {
               onClick={() => navigate("/rewrite")}
             >
               <div className="dashboard-feature-icon">✍️</div>
-              <h3>Viết lại</h3>
-              <p>Cải thiện văn phong, paraphrasing thông minh</p>
+              <h3>{t("Viết lại", "Rewrite")}</h3>
+              <p>{t("Cải thiện văn phong, paraphrasing thông minh", "Improve writing style with smart paraphrasing")}</p>
               <span className="dashboard-feature-link">
-                Thử ngay <span className="dashboard-feature-arrow">→</span>
+                {t("Thử ngay", "Try now")} <span className="dashboard-feature-arrow">→</span>
               </span>
             </button>
 
@@ -155,10 +160,10 @@ export default function Home() {
               onClick={() => navigate("/history")}
             >
               <div className="dashboard-feature-icon">📚</div>
-              <h3>Lịch sử</h3>
-              <p>Xem lại các lần phân tích và hoạt động trước đó</p>
+              <h3>{t("Lịch sử", "History")}</h3>
+              <p>{t("Xem lại các lần phân tích và hoạt động trước đó", "Review past analyses and activities")}</p>
               <span className="dashboard-feature-link">
-                Xem ngay <span className="dashboard-feature-arrow">→</span>
+                {t("Xem ngay", "View now")} <span className="dashboard-feature-arrow">→</span>
               </span>
             </button>
           </div>
@@ -167,29 +172,29 @@ export default function Home() {
         {/* Recent Documents */}
         <section className="dashboard-documents">
           <div className="dashboard-documents-header">
-            <h2 className="dashboard-section-title">📄 Tài liệu gần đây</h2>
+            <h2 className="dashboard-section-title">📄 {t("Tài liệu gần đây", "Recent documents")}</h2>
             <button
               onClick={() => setShowUpload(true)}
               className="dashboard-add-btn"
             >
-              + Thêm mới
+              + {t("Thêm mới", "Add new")}
             </button>
           </div>
 
           {isLoading && (
             <div className="dashboard-loading">
               <div className="dashboard-spinner"></div>
-              <p>Đang tải tài liệu...</p>
+              <p>{t("Đang tải tài liệu...", "Loading documents...")}</p>
             </div>
           )}
 
           {!isLoading && documents.length === 0 && (
             <div className="dashboard-empty">
               <div className="dashboard-empty-icon">📭</div>
-              <h3>Chưa có tài liệu nào</h3>
-              <p>Upload tài liệu đầu tiên để bắt đầu phân tích với AI</p>
+              <h3>{t("Chưa có tài liệu nào", "No documents yet")}</h3>
+              <p>{t("Upload tài liệu đầu tiên để bắt đầu phân tích với AI", "Upload your first document to start analyzing with AI")}</p>
               <button onClick={() => setShowUpload(true)} className="dashboard-empty-btn">
-                Upload tài liệu
+                {t("Upload tài liệu", "Upload document")}
               </button>
             </div>
           )}
@@ -211,21 +216,21 @@ export default function Home() {
                     <button
                       className="dashboard-doc-delete"
                       onClick={(e) => handleDelete(e, doc.document_id)}
-                      title="Xóa tài liệu"
+                      title={t("Xóa tài liệu", "Delete document")}
                     >
                       🗑️
                     </button>
                   </div>
 
                   <h4 className="dashboard-doc-title">
-                    {doc.title || "Không có tiêu đề"}
+                    {doc.title || t("Không có tiêu đề", "Untitled")}
                   </h4>
                   <p className="dashboard-doc-meta">
-                    {doc.paragraph_count} đoạn · {new Date(doc.created_at).toLocaleDateString("vi-VN")}
+                    {doc.paragraph_count} {t("đoạn", "paragraphs")} · {new Date(doc.created_at).toLocaleDateString(dateLocale)}
                   </p>
 
                   <div className="dashboard-doc-actions">
-                    <span className="dashboard-doc-action">Đọc tiếp →</span>
+                    <span className="dashboard-doc-action">{t("Đọc tiếp", "Continue reading")} →</span>
                   </div>
                 </div>
               ))}
@@ -235,7 +240,7 @@ export default function Home() {
                   className="dashboard-view-more"
                   onClick={() => navigate("/history")}
                 >
-                  <span>Xem tất cả {documents.length} tài liệu</span>
+                  <span>{t("Xem tất cả", "View all")} {documents.length} {t("tài liệu", "documents")}</span>
                   <span>→</span>
                 </button>
               )}
@@ -250,7 +255,7 @@ export default function Home() {
               <span className="dashboard-stat-icon">📄</span>
               <div className="dashboard-stat-content">
                 <span className="dashboard-stat-value">{documents.length}</span>
-                <span className="dashboard-stat-label">Tài liệu</span>
+                <span className="dashboard-stat-label">{t("Tài liệu", "Documents")}</span>
               </div>
             </div>
             <div className="dashboard-stat-card">
@@ -259,7 +264,7 @@ export default function Home() {
                 <span className="dashboard-stat-value">
                   {documents.reduce((acc, doc) => acc + (doc.paragraph_count || 0), 0)}
                 </span>
-                <span className="dashboard-stat-label">Đoạn văn</span>
+                <span className="dashboard-stat-label">{t("Đoạn văn", "Paragraphs")}</span>
               </div>
             </div>
             <div className="dashboard-stat-card">
@@ -268,7 +273,7 @@ export default function Home() {
                 <span className="dashboard-stat-value">
                   {langFlags[currentLang]}
                 </span>
-                <span className="dashboard-stat-label">Ngôn ngữ</span>
+                <span className="dashboard-stat-label">{t("Ngôn ngữ", "Language")}</span>
               </div>
             </div>
           </section>

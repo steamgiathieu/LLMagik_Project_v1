@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
+import { useUiPreferences } from "@/lib/uiPreferences";
 import "./Profile.css";
 
 export default function Profile() {
   const navigate = useNavigate();
   const { user, profile, updateProfile, logout, fetchMe, isLoading } = useAuthStore();
+  const { t } = useUiPreferences();
 
   const [formData, setFormData] = useState({
     language: profile?.language || user?.language || "vi",
@@ -32,7 +34,7 @@ export default function Profile() {
     }
 
     if (user?.language) {
-      setFormData((prev) => ({ ...prev, language: user.language }));
+      setFormData((prev) => ({ ...prev, language: user.language ?? "vi" }));
     }
   }, [profile, user?.language]);
 
@@ -42,7 +44,7 @@ export default function Profile() {
 
     try {
       await updateProfile(formData);
-      setMessage("✅ Đã cập nhật hồ sơ");
+      setMessage(t("✅ Đã cập nhật hồ sơ", "✅ Profile updated"));
     } catch (err: any) {
       setMessage("❌ " + err.message);
     }
@@ -57,11 +59,11 @@ export default function Profile() {
     <div className="profile-page">
       <header className="profile-header">
         <button onClick={() => navigate("/")} className="btn-back">
-          ← Trang chủ
+          ← {t("Trang chủ", "Home")}
         </button>
-        <h1>Hồ sơ người dùng</h1>
+        <h1>{t("Hồ sơ người dùng", "User profile")}</h1>
         <button onClick={handleLogout} className="btn-logout">
-          Đăng xuất
+          {t("Đăng xuất", "Sign out")}
         </button>
       </header>
 
@@ -79,10 +81,10 @@ export default function Profile() {
           </div>
 
           <form onSubmit={handleSubmit} className="profile-form">
-            <h3>Cài đặt</h3>
+            <h3>{t("Cài đặt", "Settings")}</h3>
 
             <div className="form-group">
-              <label htmlFor="language">🌐 Ngôn ngữ nhận kết quả phân tích</label>
+              <label htmlFor="language">🌐 {t("Ngôn ngữ nhận kết quả phân tích", "Language for system outputs")}</label>
               <select
                 id="language"
                 value={formData.language}
@@ -94,11 +96,11 @@ export default function Profile() {
                 <option value="ja">🇯🇵 日本語 (Japanese)</option>
                 <option value="fr">🇫🇷 Français (French)</option>
               </select>
-              <p className="form-hint">AI sẽ trả lời phân tích, chat và viết lại bằng ngôn ngữ này</p>
+              <p className="form-hint">{t("AI sẽ trả lời phân tích, chat và viết lại bằng ngôn ngữ này", "AI analysis, chat and rewrite outputs follow this language")}</p>
             </div>
 
             <div className="form-group">
-              <label htmlFor="role">Vai trò</label>
+              <label htmlFor="role">{t("Vai trò", "Role")}</label>
               <select
                 id="role"
                 value={formData.role}
@@ -106,25 +108,25 @@ export default function Profile() {
                   setFormData({ ...formData, role: e.target.value as any })
                 }
               >
-                <option value="reader">Người đọc</option>
-                <option value="writer">Người viết</option>
-                <option value="both">Cả hai</option>
+                <option value="reader">{t("Người đọc", "Reader")}</option>
+                <option value="writer">{t("Người viết", "Writer")}</option>
+                <option value="both">{t("Cả hai", "Both")}</option>
               </select>
               <p className="form-hint">
-                Vai trò mặc định khi phân tích văn bản
+                {t("Vai trò mặc định khi phân tích văn bản", "Default role when analyzing text")}
               </p>
             </div>
 
             <div className="form-group">
-              <label htmlFor="age_group">Độ tuổi</label>
+              <label htmlFor="age_group">{t("Độ tuổi", "Age group")}</label>
               <select
                 id="age_group"
                 value={formData.age_group}
                 onChange={(e) => setFormData({ ...formData, age_group: e.target.value })}
               >
-                <option value="teen">Thanh thiếu niên (13-18)</option>
-                <option value="adult">Người lớn (18+)</option>
-                <option value="senior">Cao niên (60+)</option>
+                <option value="teen">{t("Thanh thiếu niên (13-18)", "Teen (13-18)")}</option>
+                <option value="adult">{t("Người lớn (18+)", "Adult (18+)")}</option>
+                <option value="senior">{t("Cao niên (60+)", "Senior (60+)")}</option>
               </select>
             </div>
 
@@ -135,7 +137,7 @@ export default function Profile() {
             )}
 
             <button type="submit" disabled={isLoading} className="btn-save">
-              {isLoading ? "Đang lưu..." : "Lưu thay đổi"}
+              {isLoading ? t("Đang lưu...", "Saving...") : t("Lưu thay đổi", "Save changes")}
             </button>
           </form>
         </div>
