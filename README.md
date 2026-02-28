@@ -470,3 +470,15 @@ This is an educational/portfolio project demonstrating:
 **Last Updated**: February 21, 2025
 
 For detailed guidance, see [DEBUGGING_GUIDE.md](DEBUGGING_GUIDE.md)
+
+## 👥 Team LLMagik
+
+- **Phạm Khôi Nguyên**  
+  https://github.com/thisIsAnVariableOfACoder  
+
+- **Đinh Quang Minh**  
+  https://github.com/minhhdinh192  
+
+- **Vũ Minh Hoàng**  
+  https://github.com/GetInHod  
+

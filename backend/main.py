@@ -51,6 +51,16 @@ def _load_cors_origins() -> list[str]:
         except Exception:
             pass
 
+    # Fallback single-origin envs often used in hosting dashboards.
+    single_origin_candidates = [
+        os.getenv("FRONTEND_URL", "").strip(),
+        os.getenv("APP_URL", "").strip(),
+        os.getenv("PUBLIC_APP_URL", "").strip(),
+    ]
+    single_origins = [x for x in single_origin_candidates if x]
+    if single_origins:
+        return single_origins
+
     return [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
@@ -64,7 +74,13 @@ cors_origins = _load_cors_origins()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origin_regex=(
+        r"https?://(localhost|127\.0\.0\.1)(:\d+)?$|"
+        r"https://[\w.-]+\.github\.io$|"
+        r"https://[\w.-]+\.vercel\.app$|"
+        r"https://[\w.-]+\.netlify\.app$|"
+        r"https://[\w.-]+\.onrender\.com$"
+    ),
     allow_credentials=True,  # Enable credentials (cookies)
     allow_methods=["*"],
     allow_headers=["*"],
