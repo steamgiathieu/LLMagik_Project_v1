@@ -23,7 +23,7 @@ def _db_name_from_uri(uri: str) -> str:
 
 def init_mongo() -> None:
     global _mongo_client, _mongo_db
-    uri = os.getenv("MONGODB_URI", "").strip()
+    uri = os.getenv("MONGODB_URI", "").strip() or os.getenv("MONGODB_URL", "").strip()
     if not uri:
         return
     try:

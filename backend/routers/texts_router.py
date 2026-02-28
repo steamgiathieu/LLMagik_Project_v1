@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, s
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from database import get_db
+from database import get_db, get_persistent_data_root
 from auth import get_current_user
 import models
 import models_text
@@ -17,7 +17,8 @@ from services.text_processor import process_input
 router = APIRouter(prefix="/texts", tags=["Text Input"])
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+LEGACY_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+UPLOAD_DIR = str((get_persistent_data_root() / "llmagik" / "uploads").resolve())
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
@@ -28,11 +29,14 @@ def _safe_filename(filename: str) -> str:
 
 def _original_file_path_from_doc_id(document_id: str) -> Optional[str]:
     prefix = f"{document_id}__"
-    for name in os.listdir(UPLOAD_DIR):
-        if name.startswith(prefix):
-            full = os.path.join(UPLOAD_DIR, name)
-            if os.path.isfile(full):
-                return full
+    for folder in (UPLOAD_DIR, LEGACY_UPLOAD_DIR):
+        if not os.path.isdir(folder):
+            continue
+        for name in os.listdir(folder):
+            if name.startswith(prefix):
+                full = os.path.join(folder, name)
+                if os.path.isfile(full):
+                    return full
     return None
 
 

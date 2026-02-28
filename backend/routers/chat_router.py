@@ -164,7 +164,7 @@ async def chat(
 
     # 2. Get or create session
     session = _get_or_create_session(
-        db, current_user.id, payload.document_id, payload.session_id
+        db, current_user.id, doc.id, payload.session_id
     )
 
     # 3. Build paragraph context (capped)
