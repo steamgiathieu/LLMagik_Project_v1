@@ -38,7 +38,7 @@ function AppShell() {
       initRef.current = true;
       // Only fetch user if token exists (user previously logged in)
       if (tokenHelper.exists()) {
-        fetchMe();
+        void fetchMe({ background: true });
       }
     }
   }, []); // Empty dependency - run only once on mount

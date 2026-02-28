@@ -12,7 +12,7 @@ interface AuthState {
   login: (username: string, password: string) => Promise<void>;
   register: (data: { username: string; password: string; nickname: string; age_group?: string }) => Promise<void>;
   logout: () => Promise<void>;
-  fetchMe: () => Promise<void>;
+  fetchMe: (options?: { background?: boolean }) => Promise<void>;
   updateProfile: (data: { role?: string; age_group?: string }) => Promise<void>;
   clearError: () => void;
 }
@@ -75,18 +75,34 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  fetchMe: async () => {
-    set({ isLoading: true });
+  fetchMe: async (options) => {
+    const background = options?.background ?? false;
+    if (!background) {
+      set({ isLoading: true });
+    }
+
     try {
       const me = await authApi.me();
-      set({ user: me, profile: me.profile, isLoading: false });
+      if (background) {
+        set({ user: me, profile: me.profile, error: null });
+      } else {
+        set({ user: me, profile: me.profile, error: null, isLoading: false });
+      }
     } catch (err: any) {
       if (err.status === 401) {
         // Silent failure for expired/invalid session during app bootstrap.
-        set({ user: null, profile: null, error: null, isLoading: false });
+        if (background) {
+          set({ user: null, profile: null, error: null });
+        } else {
+          set({ user: null, profile: null, error: null, isLoading: false });
+        }
         return;
       }
-      set({ error: err.message, isLoading: false });
+      if (background) {
+        set({ error: null });
+      } else {
+        set({ error: err.message, isLoading: false });
+      }
     }
   },
 

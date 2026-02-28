@@ -159,6 +159,13 @@ def _restore_sqlite_from_mongo_if_needed(sqlite_path: Path) -> None:
         # Mongo snapshot restore is best-effort and must never block app start.
         return
 
+    # Sanity-check restored DB and avoid keeping a corrupt/empty payload.
+    if not _sqlite_has_user_data(sqlite_path):
+        try:
+            sqlite_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
 
 def _backup_sqlite_to_mongo(sqlite_path: Path) -> None:
     global _last_backup_monotonic

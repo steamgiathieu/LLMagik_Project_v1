@@ -235,6 +235,43 @@ export class ApiError extends Error {
 
 const TOKEN_KEY = "access_token";
 
+function parseJwtExp(token: string): number | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    const json = atob(padded);
+    const payload = JSON.parse(json) as { exp?: unknown };
+    return typeof payload.exp === "number" ? payload.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+function getUsableToken(): string | null {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) return null;
+
+  const exp = parseJwtExp(token);
+  // If exp exists, treat token as expired 30s early to avoid race at edge of expiry.
+  if (typeof exp === "number") {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    if (exp <= nowSeconds + 30) {
+      localStorage.removeItem(TOKEN_KEY);
+      return null;
+    }
+  }
+
+  return token;
+}
+
+function shouldInvalidateAuthForUnauthorized(requestToken: string | null): boolean {
+  const latestToken = localStorage.getItem(TOKEN_KEY);
+  if (!requestToken) return !latestToken;
+  return latestToken === requestToken;
+}
+
 export const tokenHelper = {
   save: (token: string) => {
     localStorage.setItem(TOKEN_KEY, token);
@@ -252,17 +289,17 @@ export const tokenHelper = {
     }
   },
   get: () => {
-    return localStorage.getItem(TOKEN_KEY);
+    return getUsableToken();
   },
   exists: () => {
-    return !!localStorage.getItem(TOKEN_KEY);
+    return !!getUsableToken();
   },
 };
 
 // ─────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = tokenHelper.get();
+  const requestToken = tokenHelper.get();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string> ?? {}),
@@ -270,8 +307,8 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   headers["X-UI-Language"] = getUiLanguageHeader();
 
   // Add Authorization header if token exists
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  if (requestToken) {
+    headers["Authorization"] = `Bearer ${requestToken}`;
     console.log(`[apiFetch] Sending request to ${path} with token`);
   } else {
     console.log(`[apiFetch] Sending request to ${path} WITHOUT token`);
@@ -291,10 +328,14 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     const isAuthEntryPoint = path === "/auth/login" || path === "/auth/register";
 
     if (!isAuthEntryPoint) {
-      console.log(`[apiFetch] Got 401, clearing token and dispatching logout`);
-      // Clear auth state on unauthorized protected endpoints
-      void tokenHelper.clear();
-      window.dispatchEvent(new Event("auth:logout"));
+      // Guard against stale in-flight requests logging out a newly authenticated session.
+      if (shouldInvalidateAuthForUnauthorized(requestToken)) {
+        console.log(`[apiFetch] Got 401, clearing token and dispatching logout`);
+        void tokenHelper.clear();
+        window.dispatchEvent(new Event("auth:logout"));
+      } else {
+        console.log(`[apiFetch] Got stale 401 for old token, ignoring forced logout`);
+      }
     }
 
     throw new ApiError(401, detail);
@@ -310,13 +351,13 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 }
 
 async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
-  const token = tokenHelper.get();
+  const requestToken = tokenHelper.get();
   const headers: HeadersInit = {};
   headers["X-UI-Language"] = getUiLanguageHeader();
 
   // Add Authorization header if token exists
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  if (requestToken) {
+    headers["Authorization"] = `Bearer ${requestToken}`;
     console.log(`[apiUpload] Sending request to ${path} with token`);
   } else {
     console.log(`[apiUpload] Sending request to ${path} WITHOUT token`);
@@ -333,9 +374,13 @@ async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
   console.log(`[apiUpload] Response status: ${res.status} from ${path}`);
 
   if (res.status === 401) {
-    console.log(`[apiUpload] Got 401, clearing token and dispatching logout`);
-    void tokenHelper.clear();
-    window.dispatchEvent(new Event("auth:logout"));
+    if (shouldInvalidateAuthForUnauthorized(requestToken)) {
+      console.log(`[apiUpload] Got 401, clearing token and dispatching logout`);
+      void tokenHelper.clear();
+      window.dispatchEvent(new Event("auth:logout"));
+    } else {
+      console.log(`[apiUpload] Got stale 401 for old token, ignoring forced logout`);
+    }
     throw new ApiError(401, "Phiên đăng nhập hết hạn");
   }
 
@@ -348,14 +393,14 @@ async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
 }
 
 async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Blob> {
-  const token = tokenHelper.get();
+  const requestToken = tokenHelper.get();
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string> ?? {}),
   };
   headers["X-UI-Language"] = getUiLanguageHeader();
 
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  if (requestToken) {
+    headers["Authorization"] = `Bearer ${requestToken}`;
   }
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -365,8 +410,10 @@ async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Bl
   });
 
   if (res.status === 401) {
-    void tokenHelper.clear();
-    window.dispatchEvent(new Event("auth:logout"));
+    if (shouldInvalidateAuthForUnauthorized(requestToken)) {
+      void tokenHelper.clear();
+      window.dispatchEvent(new Event("auth:logout"));
+    }
     throw new ApiError(401, "Phiên đăng nhập hết hạn");
   }
 
