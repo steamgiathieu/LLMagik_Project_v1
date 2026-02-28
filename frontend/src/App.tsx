@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { authApi, tokenHelper } from "@/api/client";
 import { applyTheme, getStoredLanguageOrNull, getStoredTheme, saveLanguage } from "@/lib/uiPreferences";
@@ -21,9 +21,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <AppShell />
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
