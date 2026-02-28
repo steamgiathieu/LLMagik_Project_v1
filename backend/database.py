@@ -1,17 +1,28 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 import os
+import hashlib
+import sqlite3
 from pathlib import Path
 from datetime import datetime, timezone
 from time import monotonic
+from urllib.parse import quote_plus
 
 from pymongo import MongoClient
+from pymongo.errors import InvalidURI
+from pymongo.uri_parser import parse_uri
+from gridfs import GridFS
+from gridfs.errors import NoFile
 from dotenv import load_dotenv
 
-load_dotenv()
+_THIS_DIR = Path(__file__).resolve().parent
+load_dotenv(dotenv_path=_THIS_DIR / ".env", override=False)
+load_dotenv(override=False)
 
 _BASE_DIR = Path(__file__).resolve().parent
 _MONGO_SNAPSHOT_COLLECTION = "sqlite_snapshots"
+_MONGO_SNAPSHOT_META_COLLECTION = "sqlite_snapshot_meta"
+_MONGO_SNAPSHOT_FILES_BUCKET = "sqlite_snapshot_files"
 _SNAPSHOT_DOC_ID = "llmagik_main"
 _BACKUP_MIN_INTERVAL_SECONDS = float(os.getenv("SQLITE_BACKUP_INTERVAL_SECONDS", "8"))
 
@@ -28,14 +39,62 @@ def _ensure_dir(path: Path) -> bool:
 
 
 def _mongo_uri() -> str:
-    return (os.getenv("MONGODB_URI", "").strip() or os.getenv("MONGODB_URL", "").strip())
+    raw = (os.getenv("MONGODB_URI", "").strip() or os.getenv("MONGODB_URL", "").strip())
+    if not raw:
+        return ""
+
+    # Keep valid URIs unchanged.
+    try:
+        parse_uri(raw)
+        return raw
+    except Exception:
+        pass
+
+    # Best-effort fix for unescaped special chars in username/password.
+    try:
+        if "://" not in raw or "@" not in raw:
+            return raw
+        scheme, rest = raw.split("://", 1)
+        auth, tail = rest.split("@", 1)
+        if ":" not in auth:
+            return raw
+        username, password = auth.split(":", 1)
+        repaired = f"{scheme}://{quote_plus(username)}:{quote_plus(password)}@{tail}"
+        parse_uri(repaired)
+        return repaired
+    except (ValueError, InvalidURI):
+        return raw
 
 
 def _mongo_db_name_from_uri(uri: str) -> str:
     tail = uri.split("://", 1)[-1]
     path = tail.split("/", 1)[-1] if "/" in tail else ""
     db_part = path.split("?", 1)[0].strip()
+    # Atlas SRV URIs often omit explicit DB in path.
+    if not db_part or db_part in ("",):
+        db_part = ""
     return db_part or os.getenv("MONGODB_DB_NAME", "llmagik")
+
+
+def _sqlite_has_user_data(path: Path) -> bool:
+    if not path.exists() or path.stat().st_size < 4096:
+        return False
+
+    conn = None
+    try:
+        conn = sqlite3.connect(str(path))
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+        if not cur.fetchone():
+            return False
+        cur.execute("SELECT COUNT(*) FROM users")
+        users_count = int(cur.fetchone()[0])
+        return users_count > 0
+    except Exception:
+        return False
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def _sqlite_path_from_url(url: str) -> Path | None:
@@ -47,7 +106,7 @@ def _sqlite_path_from_url(url: str) -> Path | None:
     return Path(raw)
 
 
-def _get_mongo_snapshot_collection():
+def _get_mongo_snapshot_db():
     global _mongo_snapshot_client
     uri = _mongo_uri()
     if not uri:
@@ -57,22 +116,39 @@ def _get_mongo_snapshot_collection():
         if _mongo_snapshot_client is None:
             _mongo_snapshot_client = MongoClient(uri, serverSelectionTimeoutMS=2500)
         db_name = _mongo_db_name_from_uri(uri)
-        return _mongo_snapshot_client[db_name][_MONGO_SNAPSHOT_COLLECTION]
+        return _mongo_snapshot_client[db_name]
     except Exception:
         return None
 
 
 def _restore_sqlite_from_mongo_if_needed(sqlite_path: Path) -> None:
-    if sqlite_path.exists():
+    # Restore when DB file is missing or has no user data (fresh/ephemeral reset).
+    if sqlite_path.exists() and _sqlite_has_user_data(sqlite_path):
         return
 
-    col = _get_mongo_snapshot_collection()
-    if col is None:
+    db = _get_mongo_snapshot_db()
+    if db is None:
         return
 
     try:
-        doc = col.find_one({"_id": _SNAPSHOT_DOC_ID})
-        payload = doc.get("payload") if doc else None
+        payload = None
+
+        # Preferred storage: GridFS + metadata doc.
+        meta_col = db[_MONGO_SNAPSHOT_META_COLLECTION]
+        meta = meta_col.find_one({"_id": _SNAPSHOT_DOC_ID})
+        if meta and meta.get("file_id") is not None:
+            fs = GridFS(db, collection=_MONGO_SNAPSHOT_FILES_BUCKET)
+            try:
+                payload = fs.get(meta["file_id"]).read()
+            except NoFile:
+                payload = None
+
+        # Backward compatibility with old inline payload document.
+        if payload is None:
+            legacy_col = db[_MONGO_SNAPSHOT_COLLECTION]
+            legacy_doc = legacy_col.find_one({"_id": _SNAPSHOT_DOC_ID})
+            payload = legacy_doc.get("payload") if legacy_doc else None
+
         if not payload:
             return
 
@@ -90,28 +166,64 @@ def _backup_sqlite_to_mongo(sqlite_path: Path) -> None:
     if not sqlite_path.exists():
         return
 
+    # Safety guard: never overwrite remote snapshot with an empty/new DB.
+    if not _sqlite_has_user_data(sqlite_path):
+        return
+
     # Throttle to reduce write load when multiple commits happen quickly.
     now = monotonic()
     if (now - _last_backup_monotonic) < _BACKUP_MIN_INTERVAL_SECONDS:
         return
 
-    col = _get_mongo_snapshot_collection()
-    if col is None:
+    db = _get_mongo_snapshot_db()
+    if db is None:
         return
 
     try:
         payload = sqlite_path.read_bytes()
-        col.update_one(
+        payload_hash = hashlib.sha256(payload).hexdigest()
+        size_bytes = len(payload)
+        now_dt = datetime.now(timezone.utc)
+
+        meta_col = db[_MONGO_SNAPSHOT_META_COLLECTION]
+        prev_meta = meta_col.find_one({"_id": _SNAPSHOT_DOC_ID}) or {}
+        if prev_meta.get("sha256") == payload_hash:
+            _last_backup_monotonic = now
+            return
+
+        fs = GridFS(db, collection=_MONGO_SNAPSHOT_FILES_BUCKET)
+        new_file_id = fs.put(
+            payload,
+            filename="llmagik_sqlite.db",
+            contentType="application/octet-stream",
+            metadata={
+                "sha256": payload_hash,
+                "size_bytes": size_bytes,
+                "saved_at": now_dt,
+            },
+        )
+
+        meta_col.update_one(
             {"_id": _SNAPSHOT_DOC_ID},
             {
                 "$set": {
-                    "payload": payload,
+                    "file_id": new_file_id,
+                    "sha256": payload_hash,
+                    "size_bytes": size_bytes,
                     "db_path": str(sqlite_path),
-                    "saved_at": datetime.now(timezone.utc),
+                    "saved_at": now_dt,
                 }
             },
             upsert=True,
         )
+
+        old_file_id = prev_meta.get("file_id")
+        if old_file_id and old_file_id != new_file_id:
+            try:
+                fs.delete(old_file_id)
+            except Exception:
+                pass
+
         _last_backup_monotonic = now
     except Exception:
         # Best-effort backup; do not fail request lifecycle.

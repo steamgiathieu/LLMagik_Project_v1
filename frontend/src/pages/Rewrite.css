@@ -1,6 +1,6 @@
 .rewrite-page {
   min-height: 100vh;
-  background: #f3f4f8;
+  background: var(--bg-page);
   color: var(--text-main);
   padding: 16px;
 }
@@ -27,8 +27,8 @@
 
 .rewrite-back-btn,
 .rewrite-go-home {
-  border: 1px solid #d1d5db;
-  background: #fff;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
   color: var(--text-main);
   border-radius: 10px;
   padding: 8px 12px;
@@ -44,8 +44,8 @@
 .rewrite-sidebar,
 .rewrite-main,
 .rewrite-empty {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 14px;
   padding: 14px;
 }
@@ -58,10 +58,10 @@
   width: 100%;
   margin-top: 8px;
   margin-bottom: 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 8px;
-  background: #fff;
+  background: var(--bg-surface);
 }
 
 .rewrite-source-modes {
@@ -71,8 +71,8 @@
 }
 
 .rewrite-source-modes button {
-  border: 1px solid #d1d5db;
-  background: #fff;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
   color: var(--text-main);
   border-radius: 10px;
   padding: 8px 10px;
@@ -80,9 +80,9 @@
 }
 
 .rewrite-source-modes button.active {
-  border-color: #60a5fa;
-  background: #eff6ff;
-  color: #1e3a8a;
+  border-color: var(--color-primary-light);
+  background: var(--interactive-soft-bg);
+  color: var(--interactive-soft-text);
 }
 
 .rewrite-empty-inline p {
@@ -96,7 +96,7 @@
 
 .rewrite-custom-textarea {
   width: 100%;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 10px;
   font-family: inherit;
@@ -106,8 +106,8 @@
 
 .rewrite-custom-textarea:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 22%, transparent);
 }
 
 .rewrite-paragraphs {
@@ -119,8 +119,8 @@
 
 .rewrite-para-btn {
   text-align: left;
-  border: 1px solid #e5e7eb;
-  background: #fff;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
   border-radius: 10px;
   padding: 10px;
   cursor: pointer;
@@ -128,8 +128,8 @@
 
 .rewrite-para-btn span {
   display: inline-block;
-  background: #eff6ff;
-  color: #1e3a8a;
+  background: var(--interactive-soft-bg);
+  color: var(--interactive-soft-text);
   font-size: 0.72rem;
   border-radius: 999px;
   padding: 2px 8px;
@@ -141,14 +141,15 @@
   margin: 0;
   line-height: 1.5;
   display: -webkit-box;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
 .rewrite-para-btn.active {
-  border-color: #60a5fa;
-  background: #f0f9ff;
+  border-color: var(--color-primary-light);
+  background: var(--interactive-soft-bg);
 }
 
 .rewrite-placeholder {
@@ -176,32 +177,32 @@
 :root[data-theme="dark"] .rewrite-select,
 :root[data-theme="dark"] .rewrite-back-btn,
 :root[data-theme="dark"] .rewrite-go-home {
-  background: #0b1220;
+  background: var(--interactive-muted-bg);
   color: var(--text-main);
   border-color: var(--border-subtle);
 }
 
 :root[data-theme="dark"] .rewrite-source-modes button,
 :root[data-theme="dark"] .rewrite-custom-textarea {
-  background: #0b1220;
+  background: var(--interactive-muted-bg);
   color: var(--text-main);
   border-color: var(--border-subtle);
 }
 
 :root[data-theme="dark"] .rewrite-source-modes button.active {
-  background: #10243f;
-  color: #93c5fd;
-  border-color: #3b82f6;
+  background: var(--interactive-soft-bg);
+  color: var(--interactive-soft-text);
+  border-color: var(--color-primary);
 }
 
 :root[data-theme="dark"] .rewrite-back-btn:hover,
 :root[data-theme="dark"] .rewrite-go-home:hover {
-  background: #111b2e;
-  border-color: #64748b;
+  background: var(--interactive-muted-bg-hover);
+  border-color: var(--text-muted);
 }
 
 :root[data-theme="dark"] .rewrite-para-btn {
-  background: #0f172a;
+  background: var(--interactive-muted-bg);
   border-color: var(--border-subtle);
 }
 
@@ -210,13 +211,13 @@
 }
 
 :root[data-theme="dark"] .rewrite-para-btn span {
-  background: #10243f;
-  color: #93c5fd;
+  background: var(--interactive-soft-bg);
+  color: var(--interactive-soft-text);
 }
 
 :root[data-theme="dark"] .rewrite-para-btn.active {
-  background: #10243f;
-  border-color: #3b82f6;
+  background: var(--interactive-soft-bg);
+  border-color: var(--color-primary);
 }
 
 :root[data-theme="dark"] .rewrite-placeholder,

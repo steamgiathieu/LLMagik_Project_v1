@@ -1,7 +1,7 @@
 .chat-page {
   min-height: 100vh;
   padding: 16px;
-  background: #f3f4f8;
+  background: var(--bg-page);
   color: var(--text-main);
 }
 
@@ -18,8 +18,8 @@
 }
 
 .chat-back-btn {
-  border: 1px solid #d1d5db;
-  background: #fff;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
   color: var(--text-main);
   border-radius: 10px;
   padding: 8px 12px;
@@ -35,8 +35,8 @@
 
 .chat-page-sidebar,
 .chat-page-main {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
   border-radius: 14px;
   padding: 14px;
 }
@@ -54,10 +54,10 @@
 .chat-doc-select {
   width: 100%;
   margin-top: 8px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 8px;
-  background: #fff;
+  background: var(--bg-surface);
 }
 
 @media (max-width: 1024px) {
@@ -70,20 +70,9 @@
   }
 }
 
-:root[data-theme="dark"] .chat-page {
-  background: var(--bg-page);
-  color: var(--text-main);
-}
-
-:root[data-theme="dark"] .chat-page-sidebar,
-:root[data-theme="dark"] .chat-page-main {
-  background: var(--bg-surface);
-  border-color: var(--border-subtle);
-}
-
 :root[data-theme="dark"] .chat-back-btn,
 :root[data-theme="dark"] .chat-doc-select {
-  background: #0b1220;
+  background: var(--interactive-muted-bg);
   color: var(--text-main);
   border-color: var(--border-subtle);
 }
