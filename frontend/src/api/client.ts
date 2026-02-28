@@ -1,7 +1,25 @@
 // src/api/client.ts
 // Central API client — tất cả call backend đi qua đây
 
-export const API_BASE_URL = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000";
+function normalizeApiBaseUrl(value: string): string {
+  return (value || "").trim().replace(/\/+$/, "");
+}
+
+function inferRenderBackendUrl(): string {
+  if (typeof window === "undefined") return "";
+  const host = window.location.hostname;
+  if (!host.endsWith(".onrender.com")) return "";
+
+  // Convention fallback: <name>-frontend.onrender.com -> <name>-backend.onrender.com
+  const derivedHost = host.replace(/-frontend(?=\.onrender\.com$)/, "-backend");
+  if (derivedHost === host) return "";
+  return `${window.location.protocol}//${derivedHost}`;
+}
+
+const envApiBaseUrl = normalizeApiBaseUrl((import.meta as any).env?.VITE_API_URL || "");
+const inferredApiBaseUrl = normalizeApiBaseUrl(inferRenderBackendUrl());
+
+export const API_BASE_URL = envApiBaseUrl || inferredApiBaseUrl || "http://localhost:8000";
 const UI_LANGUAGE_KEY = "ui_language";
 const SUPPORTED_UI_LANGUAGES = new Set(["vi", "en", "zh", "ja", "fr"]);
 
