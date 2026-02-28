@@ -122,9 +122,6 @@ export default function Reader() {
               {t("Mở file gốc", "Open original file")}
             </a>
           )}
-          <button onClick={() => setIsPreviewOpen(true)} className="btn-analyze">
-            {t("Mở toàn văn bản", "Open full document")}
-          </button>
         </div>
       </header>
 

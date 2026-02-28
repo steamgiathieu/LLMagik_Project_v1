@@ -279,9 +279,9 @@ export default function Home() {
       {showUpload && (
         <UploadModal
           onClose={() => setShowUpload(false)}
-          onSuccess={(docId) => {
+          onSuccess={() => {
             setShowUpload(false);
-            navigate(`/reader/${docId}`);
+            fetchDocuments().catch(() => {});
           }}
         />
       )}
