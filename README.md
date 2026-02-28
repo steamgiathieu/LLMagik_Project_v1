@@ -1,4 +1,4 @@
-# 🚀 LLMagik - AI Text Analysis Application
+# 🚀 InfoLens AI - AI Text Analysis Application
 
 Fullstack web application for intelligent text analysis, rewriting, and chat powered by AI.
 
@@ -8,7 +8,7 @@ Fullstack web application for intelligent text analysis, rewriting, and chat pow
 ## 📁 Project Structure
 
 ```
-LLMagik/
+InfoLens AI/
 ├── backend/                    # FastAPI backend
 │   ├── main.py                # App entry point, CORS, router registration  
 │   ├── database.py            # SQLAlchemy engine, session, Base
