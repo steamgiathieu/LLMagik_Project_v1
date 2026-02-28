@@ -10,9 +10,12 @@ Authentication endpoints:
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, EmailStr
-from typing import Optional
+from typing import Optional, Any
 from datetime import timedelta
 import os
+import logging
+
+from pymongo import MongoClient
 
 from database import get_db
 from auth import (
@@ -25,6 +28,7 @@ from auth import (
 import models
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -35,6 +39,199 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 SUPPORTED_LANGUAGES = {"vi", "en", "zh", "ja", "fr"}
 SUPPORTED_ROLES = {"reader", "writer", "both"}
 SUPPORTED_AGE_GROUPS = {"teen", "adult", "senior"}
+
+
+_mongo_client: Optional[MongoClient] = None
+_mongo_users_collection = None
+_mongo_profiles_collection = None
+_mongo_init_attempted = False
+
+
+def _mongo_db_name_from_uri(uri: str) -> str:
+    tail = uri.split("://", 1)[-1]
+    path = tail.split("/", 1)[-1] if "/" in tail else ""
+    db_part = path.split("?", 1)[0].strip()
+    return db_part or (os.getenv("MONGODB_DB_NAME", "llmagik").strip() or "llmagik")
+
+
+def _init_mongo_auth_collections():
+    global _mongo_client, _mongo_users_collection, _mongo_profiles_collection, _mongo_init_attempted
+    if _mongo_init_attempted:
+        return
+    _mongo_init_attempted = True
+
+    uri = (os.getenv("MONGODB_URI") or os.getenv("MONGODB_URL") or "").strip()
+    if not uri:
+        return
+
+    try:
+        db_name = (os.getenv("MONGODB_DB_NAME") or "").strip() or _mongo_db_name_from_uri(uri)
+        _mongo_client = MongoClient(uri, serverSelectionTimeoutMS=1500)
+        # ping once so invalid URI/auth doesn't break later at login time
+        _mongo_client.admin.command("ping")
+
+        db = _mongo_client[db_name]
+        _mongo_users_collection = db[(os.getenv("MONGODB_USERS_COLLECTION") or "users").strip() or "users"]
+        _mongo_profiles_collection = db[(os.getenv("MONGODB_USER_PROFILES_COLLECTION") or "user_profiles").strip() or "user_profiles"]
+    except Exception as exc:
+        logger.warning("Mongo auth bridge disabled: %s", exc)
+        _mongo_client = None
+        _mongo_users_collection = None
+        _mongo_profiles_collection = None
+
+
+def _find_mongo_user(identifier: str) -> Optional[dict[str, Any]]:
+    _init_mongo_auth_collections()
+    if _mongo_users_collection is None:
+        return None
+    query = {"$or": [{"username": identifier}, {"email": identifier}]}
+    return _mongo_users_collection.find_one(query)
+
+
+def _mongo_password_hash(doc: dict[str, Any]) -> Optional[str]:
+    for key in ("hashed_password", "password_hash", "passwordHash", "passwd_hash"):
+        value = doc.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _mongo_profile(doc: dict[str, Any]) -> dict[str, str]:
+    embedded = doc.get("profile") if isinstance(doc.get("profile"), dict) else {}
+
+    profile_doc: dict[str, Any] = {}
+    if embedded:
+        profile_doc.update(embedded)
+
+    # direct fields on user doc (common in simple schemas)
+    for key in ("language", "role", "age_group"):
+        if key in doc and doc.get(key) is not None:
+            profile_doc[key] = doc.get(key)
+
+    # optional dedicated profile collection
+    _init_mongo_auth_collections()
+    if _mongo_profiles_collection is not None:
+        uid = doc.get("_id")
+        profile_from_collection = _mongo_profiles_collection.find_one(
+            {"$or": [{"user_id": uid}, {"user_id": str(uid)}]}
+        )
+        if isinstance(profile_from_collection, dict):
+            profile_doc.update(profile_from_collection)
+
+    return {
+        "language": _normalize_language(str(profile_doc.get("language") or "vi"), "vi"),
+        "role": _normalize_role(str(profile_doc.get("role") or "reader"), "reader"),
+        "age_group": _normalize_age_group(str(profile_doc.get("age_group") or "adult"), "adult"),
+    }
+
+
+def _find_sql_user_by_identifier(db: Session, identifier: str) -> Optional[models.User]:
+    return (
+        db.query(models.User)
+        .filter(
+            (models.User.username == identifier) | (models.User.email == identifier)
+        )
+        .first()
+    )
+
+
+def _sync_sql_user_from_mongo(db: Session, mongo_user: dict[str, Any]) -> Optional[models.User]:
+    hashed = _mongo_password_hash(mongo_user)
+    if not hashed:
+        return None
+
+    username = str(mongo_user.get("username") or "").strip()
+    email = str(mongo_user.get("email") or "").strip()
+    nickname = str(mongo_user.get("nickname") or username or email or "User").strip() or "User"
+
+    if not username and email:
+        username = email.split("@", 1)[0]
+    if not username:
+        uid = str(mongo_user.get("_id") or "").strip() or "user"
+        username = f"mongo_{uid[-8:]}"
+    if not email:
+        email = f"{username}@local.invalid"
+
+    user = (
+        db.query(models.User)
+        .filter((models.User.username == username) | (models.User.email == email))
+        .first()
+    )
+
+    if not user:
+        user = models.User(
+            username=username,
+            email=email,
+            nickname=nickname,
+            hashed_password=hashed,
+        )
+        db.add(user)
+        db.flush()
+    else:
+        # keep SQL mirror fresh with Mongo credentials/profile
+        user.nickname = nickname
+        user.hashed_password = hashed
+
+    p = _mongo_profile(mongo_user)
+    profile = db.query(models.UserProfile).filter(models.UserProfile.user_id == user.id).first()
+    if not profile:
+        profile = models.UserProfile(
+            user_id=user.id,
+            language=p["language"],
+            role=p["role"],
+            age_group=p["age_group"],
+        )
+        db.add(profile)
+    else:
+        profile.language = p["language"]
+        profile.role = p["role"]
+        profile.age_group = p["age_group"]
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def _upsert_mongo_user_profile(user: models.User, language: str, role: str, age_group: str) -> None:
+    _init_mongo_auth_collections()
+    if _mongo_users_collection is None:
+        return
+    try:
+        _mongo_users_collection.update_one(
+            {"$or": [{"username": user.username}, {"email": user.email}]},
+            {
+                "$set": {
+                    "username": user.username,
+                    "email": user.email,
+                    "nickname": user.nickname,
+                    "hashed_password": user.hashed_password,
+                    "language": language,
+                    "role": role,
+                    "age_group": age_group,
+                }
+            },
+            upsert=True,
+        )
+    except Exception as exc:
+        logger.warning("Mongo user upsert skipped: %s", exc)
+
+    if _mongo_profiles_collection is None:
+        return
+    try:
+        _mongo_profiles_collection.update_one(
+            {"user_id": user.id},
+            {
+                "$set": {
+                    "user_id": user.id,
+                    "language": language,
+                    "role": role,
+                    "age_group": age_group,
+                }
+            },
+            upsert=True,
+        )
+    except Exception as exc:
+        logger.warning("Mongo profile upsert skipped: %s", exc)
 
 
 def _normalize_language(value: Optional[str], default: str = "vi") -> str:
@@ -180,6 +377,21 @@ def register(
             detail="Email đã được sử dụng",
         )
 
+    # Optional Mongo duplicate checks (if Mongo auth bridge is enabled)
+    existing_mongo_by_username = _find_mongo_user(payload.username)
+    if existing_mongo_by_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tên người dùng đã tồn tại",
+        )
+
+    existing_mongo_by_email = _find_mongo_user(payload.email)
+    if existing_mongo_by_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email đã được sử dụng",
+        )
+
     # Create new user
     user = models.User(
         username=payload.username,
@@ -203,6 +415,9 @@ def register(
     db.add(profile)
     db.commit()
     db.refresh(user)
+
+    # Best-effort mirror to Mongo (for deployments storing auth users in Mongo)
+    _upsert_mongo_user_profile(user, language=lang, role="reader", age_group=age_group)
 
     # Create access token
     access_token = create_access_token(
@@ -244,11 +459,18 @@ def login(
     
     Trả về JWT access_token trong cookie nếu thành công.
     """
-    user = db.query(models.User).filter(
-        models.User.username == payload.username
-    ).first()
+    user = _find_sql_user_by_identifier(db, payload.username)
+    authenticated = bool(user and verify_password(payload.password, user.hashed_password))
 
-    if not user or not verify_password(payload.password, user.hashed_password):
+    # Mongo fallback: if SQL doesn't have this account, try Mongo and sync into SQL.
+    if not authenticated:
+        mongo_user = _find_mongo_user(payload.username)
+        mongo_hash = _mongo_password_hash(mongo_user) if mongo_user else None
+        if mongo_user and mongo_hash and verify_password(payload.password, mongo_hash):
+            user = _sync_sql_user_from_mongo(db, mongo_user)
+            authenticated = user is not None
+
+    if not authenticated or not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Tên người dùng hoặc mật khẩu không đúng",
