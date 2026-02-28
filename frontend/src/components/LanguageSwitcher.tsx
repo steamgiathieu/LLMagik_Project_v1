@@ -6,9 +6,11 @@ import {
   getStoredTheme,
   saveLanguage,
   saveTheme,
+  normalizeLanguage,
   ThemeMode,
   useUiPreferences,
 } from "@/lib/uiPreferences";
+import { tokenHelper } from "@/api/client";
 import "./LanguageSwitcher.css";
 
 const LANGUAGES = [
@@ -26,11 +28,11 @@ export default function LanguageSwitcher() {
 
   const handleLanguageChange = async (langCode: string) => {
     setIsOpen(false);
-    const normalized = saveLanguage(langCode);
+    const normalized = saveLanguage(normalizeLanguage(langCode));
     document.documentElement.lang = normalized;
 
     // On login/register screen (not authenticated), only persist locally.
-    if (!user) return;
+    if (!user || !tokenHelper.exists()) return;
 
     try {
       await updateProfile({ language: normalized });

@@ -98,7 +98,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         isLoading: false,
       }));
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
+      if (err?.status === 401) {
+        set({ user: null, profile: null, error: err.message, isLoading: false });
+      } else {
+        set({ error: err.message, isLoading: false });
+      }
       throw err;
     }
   },

@@ -212,12 +212,17 @@ export const tokenHelper = {
   save: (token: string) => {
     localStorage.setItem(TOKEN_KEY, token);
   },
-  clear: () => {
+  clear: async () => {
     localStorage.removeItem(TOKEN_KEY);
-    // Call logout endpoint to clear backend cookies
-    return apiFetch<void>("/auth/logout", { method: "POST" }).catch(() => {
-      // Ignore errors on logout
-    });
+    // Best-effort cookie cleanup without going through apiFetch 401 handler.
+    try {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // Ignore network/logout errors
+    }
   },
   get: () => {
     return localStorage.getItem(TOKEN_KEY);
@@ -255,7 +260,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   if (res.status === 401) {
     console.log(`[apiFetch] Got 401, clearing token and dispatching logout`);
     // Clear auth state on unauthorized
-    tokenHelper.clear();
+    void tokenHelper.clear();
     window.dispatchEvent(new Event("auth:logout"));
     throw new ApiError(401, "Phiên đăng nhập hết hạn");
   }
@@ -293,7 +298,7 @@ async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
 
   if (res.status === 401) {
     console.log(`[apiUpload] Got 401, clearing token and dispatching logout`);
-    tokenHelper.clear();
+    void tokenHelper.clear();
     window.dispatchEvent(new Event("auth:logout"));
     throw new ApiError(401, "Phiên đăng nhập hết hạn");
   }
@@ -323,7 +328,7 @@ async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Bl
   });
 
   if (res.status === 401) {
-    tokenHelper.clear();
+    void tokenHelper.clear();
     window.dispatchEvent(new Event("auth:logout"));
     throw new ApiError(401, "Phiên đăng nhập hết hạn");
   }
