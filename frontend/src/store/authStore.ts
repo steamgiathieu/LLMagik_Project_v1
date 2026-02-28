@@ -81,10 +81,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       const me = await authApi.me();
       set({ user: me, profile: me.profile, isLoading: false });
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
       if (err.status === 401) {
-        set({ user: null, profile: null });
+        // Silent failure for expired/invalid session during app bootstrap.
+        set({ user: null, profile: null, error: null, isLoading: false });
+        return;
       }
+      set({ error: err.message, isLoading: false });
     }
   },
 
