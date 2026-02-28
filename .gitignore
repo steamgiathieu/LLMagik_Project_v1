@@ -60,3 +60,6 @@ frontend/.vite/
 # Backend
 backend/__pycache__/
 backend/*.pyc
+
+!frontend/src/lib/
+!frontend/src/lib/**
