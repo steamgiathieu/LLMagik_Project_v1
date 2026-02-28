@@ -4,29 +4,30 @@
 
 :root {
   /* ── Brand Colors ── */
-  --color-primary:        #4f6ef7;
-  --color-primary-dark:   #3b5bdb;
-  --color-primary-light:  #748ffc;
-  --color-secondary:      #7048e8;
-  --color-secondary-dark: #5f3dc4;
+  --color-primary:        #2563eb;
+  --color-primary-dark:   #1d4ed8;
+  --color-primary-light:  #60a5fa;
+  --color-secondary:      #7c3aed;
+  --color-secondary-dark: #6d28d9;
+  --color-accent:         #06b6d4;
 
   /* Gradient shortcuts */
-  --gradient-brand:       linear-gradient(135deg, #4f6ef7 0%, #7048e8 100%);
-  --gradient-brand-soft:  linear-gradient(135deg, rgba(79,110,247,.1) 0%, rgba(112,72,232,.1) 100%);
-  --gradient-hero:        linear-gradient(160deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  --gradient-brand:       linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  --gradient-brand-soft:  linear-gradient(135deg, rgba(37,99,235,.1) 0%, rgba(124,58,237,.1) 100%);
+  --gradient-hero:        linear-gradient(160deg, #0f172a 0%, #1e293b 50%, #334155 100%);
 
   /* ── Neutral Palette ── */
   --color-white:          #ffffff;
-  --color-gray-50:        #f8f9fa;
-  --color-gray-100:       #f1f3f5;
-  --color-gray-200:       #e9ecef;
-  --color-gray-300:       #dee2e6;
-  --color-gray-400:       #6c757d;  /* Darker for better contrast on white */
-  --color-gray-500:       #495057;  /* Darker for better contrast on white */
-  --color-gray-600:       #343a40;
-  --color-gray-700:       #212529;
-  --color-gray-800:       #0d1117;
-  --color-gray-900:       #030712;
+  --color-gray-50:        #f8fafc;
+  --color-gray-100:       #f1f5f9;
+  --color-gray-200:       #e2e8f0;
+  --color-gray-300:       #cbd5e1;
+  --color-gray-400:       #94a3b8;
+  --color-gray-500:       #475569;
+  --color-gray-600:       #334155;
+  --color-gray-700:       #1e293b;
+  --color-gray-800:       #0f172a;
+  --color-gray-900:       #020617;
 
   /* ── Semantic Colors ── */
   --color-success:        #10b981;
@@ -92,7 +93,7 @@
   --shadow-lg:  0 10px 15px rgba(0,0,0,.1), 0 4px 6px rgba(0,0,0,.05);
   --shadow-xl:  0 20px 25px rgba(0,0,0,.1), 0 10px 10px rgba(0,0,0,.04);
   --shadow-2xl: 0 25px 50px rgba(0,0,0,.25);
-  --shadow-brand: 0 8px 24px rgba(102,126,234,.35);
+  --shadow-brand: 0 8px 24px rgba(37,99,235,.28);
 
   /* ── Transitions ── */
   --transition-fast:   all 0.15s ease;
@@ -120,26 +121,32 @@
   --sidebar-width: 280px;
 
   /* Theme tokens */
-  --bg-page: var(--color-gray-50);
-  --bg-surface: var(--color-white);
-  --text-main: var(--color-gray-800);
-  --text-muted: var(--color-gray-500);
-  --border-subtle: var(--color-gray-200);
+  --bg-page: #f8fafc;
+  --bg-surface: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --border-subtle: #e2e8f0;
 }
 
 /* Keep a stable light palette across OS themes to avoid low-contrast text on white surfaces. */
 
 :root[data-theme="dark"] {
-  --bg-page: #070e19;
-  --bg-surface: #0f172a;
-  --text-main: #f8fafc;
+  --bg-page: #0f172a;
+  --bg-surface: #1e293b;
+  --text-main: #f1f5f9;
   --text-muted: #cbd5e1;
-  --border-subtle: #475569;
+  --border-subtle: #334155;
+  --color-primary: #3b82f6;
+  --color-primary-dark: #2563eb;
+  --color-primary-light: #60a5fa;
+  --color-secondary: #a78bfa;
+  --color-secondary-dark: #8b5cf6;
+  --color-accent: #22d3ee;
   --color-white: #ffffff;
-  --color-gray-50: #070e19;
-  --color-gray-100: #0f172a;
-  --color-gray-200: #1e293b;
-  --color-gray-300: #334155;
+  --color-gray-50: #0f172a;
+  --color-gray-100: #1e293b;
+  --color-gray-200: #334155;
+  --color-gray-300: #475569;
   --color-gray-400: #94a3b8;
   --color-gray-500: #cbd5e1;
   --color-gray-600: #e2e8f0;
