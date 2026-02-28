@@ -17,7 +17,7 @@ const LANGUAGES = [
 ];
 
 export default function LanguageSwitcher() {
-  const { updateProfile } = useAuthStore();
+  const { user, updateProfile } = useAuthStore();
   const { language: currentLang, t } = useUiPreferences();
   const [isOpen, setIsOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getStoredTheme());
@@ -28,6 +28,10 @@ export default function LanguageSwitcher() {
     setIsOpen(false);
     const normalized = saveLanguage(langCode);
     document.documentElement.lang = normalized;
+
+    // On login/register screen (not authenticated), only persist locally.
+    if (!user) return;
+
     try {
       await updateProfile({ language: normalized });
     } catch (error) {
