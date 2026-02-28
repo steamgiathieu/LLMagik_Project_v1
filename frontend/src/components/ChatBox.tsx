@@ -1,25 +1,41 @@
 // src/components/ChatBox.tsx
 import { useState } from "react";
 import { useChatStore } from "@/store/chatStore";
+import { useUiPreferences } from "@/lib/uiPreferences";
 import "./ChatBox.css";
 
 interface ChatBoxProps {
-  documentId: string;
+  documentId?: string;
+  allowCustomContext?: boolean;
 }
 
-export default function ChatBox({ documentId }: ChatBoxProps) {
-  const { messages, sendMessage, isLoading, error, clearError } = useChatStore();
+export default function ChatBox({ documentId, allowCustomContext = true }: ChatBoxProps) {
+  const { t } = useUiPreferences();
+  const { messages, sendMessage, isLoading, error, clearError, startNewSession } = useChatStore();
   const [input, setInput] = useState("");
+  const [mode, setMode] = useState<"document" | "custom">(documentId ? "document" : "custom");
+  const [contextText, setContextText] = useState("");
+  const [localError, setLocalError] = useState("");
 
   const handleSend = async () => {
     if (!input.trim()) return;
+    const usingDocument = mode === "document" && !!documentId;
+    if (!usingDocument && contextText.trim().length < 10) {
+      setLocalError(t("Vui lòng nhập ngữ liệu ít nhất 10 ký tự", "Please provide at least 10 characters of context"));
+      return;
+    }
 
     const question = input;
     setInput("");
     clearError();
+    setLocalError("");
 
     try {
-      await sendMessage(documentId, question);
+      await sendMessage({
+        question,
+        documentId: usingDocument ? documentId : undefined,
+        contextText: usingDocument ? undefined : contextText,
+      });
     } catch (err) {
       // Error already set in store
     }
@@ -34,10 +50,54 @@ export default function ChatBox({ documentId }: ChatBoxProps) {
 
   return (
     <div className="chat-box">
+      {allowCustomContext && (
+        <div className="chat-context-panel">
+          <div className="chat-context-modes">
+            <button
+              className={mode === "document" ? "active" : ""}
+              disabled={!documentId}
+              onClick={() => {
+                setMode("document");
+                setLocalError("");
+                clearError();
+                startNewSession();
+              }}
+            >
+              {t("Theo tài liệu", "Use document")}
+            </button>
+            <button
+              className={mode === "custom" ? "active" : ""}
+              onClick={() => {
+                setMode("custom");
+                setLocalError("");
+                clearError();
+                startNewSession();
+              }}
+            >
+              {t("Ngữ liệu tự nhập", "Custom context")}
+            </button>
+          </div>
+
+          {mode === "custom" && (
+            <textarea
+              value={contextText}
+              onChange={(e) => setContextText(e.target.value)}
+              disabled={isLoading}
+              rows={3}
+              className="chat-context-textarea"
+              placeholder={t(
+                "Dán ngữ liệu muốn AI dựa vào để trả lời...",
+                "Paste the source text that AI should use to answer..."
+              )}
+            />
+          )}
+        </div>
+      )}
+
       <div className="chat-messages">
         {messages.length === 0 && (
           <div className="chat-empty">
-            <p>💬 Hỏi về tài liệu hoặc nhắn chào để bắt đầu</p>
+            <p>{t("💬 Hỏi AI để bắt đầu hội thoại", "💬 Ask AI to start the conversation")}</p>
           </div>
         )}
 
@@ -83,6 +143,11 @@ export default function ChatBox({ documentId }: ChatBoxProps) {
             <p>❌ {error}</p>
           </div>
         )}
+        {localError && (
+          <div className="chat-error">
+            <p>❌ {localError}</p>
+          </div>
+        )}
       </div>
 
       <div className="chat-input-area">
@@ -90,7 +155,7 @@ export default function ChatBox({ documentId }: ChatBoxProps) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="Hỏi về tài liệu hoặc nhắn 'hello'..."
+          placeholder={t("Nhập câu hỏi của bạn...", "Type your question...")}
           rows={2}
           disabled={isLoading}
             className="chat-textarea"

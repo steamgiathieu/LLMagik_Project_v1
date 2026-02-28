@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Reader from "./pages/Reader";
 import Rewrite from "./pages/Rewrite";
+import Chat from "./pages/Chat";
 import History from "./pages/History";
 import Profile from "./pages/Profile";
 import LanguageSwitcher from "./components/LanguageSwitcher";
@@ -122,6 +123,15 @@ function AppShell() {
           element={
             <ProtectedRoute>
               <Rewrite />
+              <LanguageSwitcher />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chat"
+          element={
+            <ProtectedRoute>
+              <Chat />
               <LanguageSwitcher />
             </ProtectedRoute>
           }

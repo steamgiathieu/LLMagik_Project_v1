@@ -4,6 +4,7 @@ import { chatApi, type ChatMessage } from "@/api/client";
 
 interface ChatState {
   sessionId: number | null;
+  contextDocumentId: string | null;
   messages: ChatMessage[];
   isLoading: boolean;
   error: string | null;
@@ -11,12 +12,17 @@ interface ChatState {
   // Actions
   startNewSession: () => void;
   setSessionId: (sessionId: number) => void;
-  sendMessage: (docId: string, question: string) => Promise<void>;
+  sendMessage: (payload: {
+    question: string;
+    documentId?: string;
+    contextText?: string;
+  }) => Promise<void>;
   clearError: () => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
   sessionId: null,
+  contextDocumentId: null,
   messages: [],
   isLoading: false,
   error: null,
@@ -24,6 +30,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   startNewSession: () => {
     set({
       sessionId: null,
+      contextDocumentId: null,
       messages: [],
       error: null,
     });
@@ -33,12 +40,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ sessionId });
   },
 
-  sendMessage: async (docId: string, question: string) => {
+  sendMessage: async ({ question, documentId, contextText }) => {
     set({ isLoading: true, error: null });
     try {
       const currentSessionId = get().sessionId;
+      const currentContextDocId = get().contextDocumentId;
       const response = await chatApi.chat({
-        document_id: docId,
+        document_id: documentId || currentContextDocId || undefined,
+        context_text: contextText,
         user_question: question,
         session_id: currentSessionId,
       });
@@ -69,6 +78,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       set((state) => ({
         sessionId: response.session_id,
+        contextDocumentId: response.document_id,
         messages: [...state.messages, userMsg, assistantMsg],
         isLoading: false,
       }));

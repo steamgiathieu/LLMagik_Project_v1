@@ -6,7 +6,12 @@ from datetime import datetime
 # ── Request ───────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
-    document_id: str = Field(..., examples=["uuid-string"])
+    document_id: Optional[str] = Field(None, examples=["uuid-string"])
+    context_text: Optional[str] = Field(
+        None,
+        min_length=10,
+        description="Ngữ liệu tự nhập để chat khi không dùng document_id",
+    )
     user_question: str = Field(..., min_length=1, max_length=1000, examples=["Ý chính của văn bản là gì?"])
     session_id: Optional[int] = Field(
         None,
@@ -18,6 +23,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     session_id: int
+    document_id: str
     message_id: int
     answer: str
     referenced_paragraphs: List[str]

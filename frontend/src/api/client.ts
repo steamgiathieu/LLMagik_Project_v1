@@ -160,6 +160,7 @@ export interface RewriteResult {
 
 export interface ChatResponse {
   session_id: number;
+  document_id: string;
   message_id: number;
   answer: string;
   referenced_paragraphs: string[];
@@ -480,7 +481,8 @@ export const rewriteApi = {
 
 export const chatApi = {
   chat: (payload: {
-    document_id: string;
+    document_id?: string;
+    context_text?: string;
     user_question: string;
     session_id: number | null;
   }) =>

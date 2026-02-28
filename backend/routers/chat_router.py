@@ -1,5 +1,6 @@
 import time
 from typing import List
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
@@ -11,6 +12,7 @@ import models_text
 import models_chat
 import schemas_chat
 from services.ai_service import get_provider
+from services.text_processor import split_paragraphs, build_paragraph_list
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -23,6 +25,48 @@ def _resolve_ui_language(x_ui_language: str | None) -> str:
         return "vi"
     code = x_ui_language.strip().lower()
     return code if code in SUPPORTED_UI_LANGUAGES else "vi"
+
+
+def _create_inline_document(
+    db: Session,
+    user_id: int,
+    context_text: str,
+) -> models_text.Document:
+    normalized = (context_text or "").strip()
+    if len(normalized) < 10:
+        raise HTTPException(
+            status_code=422,
+            detail="Ngữ liệu tự nhập quá ngắn để chat",
+        )
+
+    para_list = build_paragraph_list(split_paragraphs(normalized))
+    if not para_list:
+        para_list = [{"id": "P1", "text": normalized}]
+
+    doc = models_text.Document(
+        id=str(uuid4()),
+        user_id=user_id,
+        title="Inline chat context",
+        source_type="text",
+        source_ref="chat:inline",
+        raw_text=normalized,
+        paragraph_count=len(para_list),
+    )
+    db.add(doc)
+    db.flush()
+
+    for idx, p in enumerate(para_list):
+        db.add(
+            models_text.Paragraph(
+                document_id=doc.id,
+                paragraph_id=p["id"],
+                index=idx,
+                text=p["text"],
+            )
+        )
+    db.flush()
+    db.refresh(doc)
+    return doc
 
 
 def _get_or_create_session(
@@ -89,17 +133,28 @@ async def chat(
     current_user: models.User = Depends(get_current_user),
     x_ui_language: str | None = Header(default=None, alias="X-UI-Language"),
 ):
-    # 1. Verify document ownership
-    doc = (
-        db.query(models_text.Document)
-        .filter(
-            models_text.Document.id == payload.document_id,
-            models_text.Document.user_id == current_user.id,
+    # 1. Resolve context from either uploaded document or inline text
+    inline_text = (payload.context_text or "").strip()
+    doc = None
+
+    if payload.document_id:
+        doc = (
+            db.query(models_text.Document)
+            .filter(
+                models_text.Document.id == payload.document_id,
+                models_text.Document.user_id == current_user.id,
+            )
+            .first()
         )
-        .first()
-    )
-    if not doc:
-        raise HTTPException(status_code=404, detail="Tài liệu không tồn tại")
+        if not doc:
+            raise HTTPException(status_code=404, detail="Tài liệu không tồn tại")
+    elif inline_text:
+        doc = _create_inline_document(db, current_user.id, inline_text)
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail="Cần cung cấp document_id hoặc context_text để chat",
+        )
 
     if not doc.paragraphs:
         raise HTTPException(
@@ -177,6 +232,7 @@ async def chat(
 
     return schemas_chat.ChatResponse(
         session_id=session.id,
+        document_id=doc.id,
         message_id=assistant_msg.id,
         answer=answer,
         referenced_paragraphs=ref_paragraphs,

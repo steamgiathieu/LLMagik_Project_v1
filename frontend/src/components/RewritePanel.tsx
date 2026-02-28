@@ -7,7 +7,7 @@ import "./RewritePanel.css";
 interface RewritePanelProps {
   paragraphId: string;
   originalText: string;
-  documentId: string;
+  documentId?: string;
 }
 
 export default function RewritePanel({
@@ -36,6 +36,10 @@ export default function RewritePanel({
       setError(t("Vui lòng nhập mục tiêu viết lại", "Please enter a rewrite goal"));
       return;
     }
+    if (!originalText.trim() || originalText.trim().length < 10) {
+      setError(t("Ngữ liệu quá ngắn để viết lại", "Input text is too short to rewrite"));
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -45,7 +49,7 @@ export default function RewritePanel({
         paragraph_id: paragraphId,
         original_text: originalText,
         goal: goal,
-        document_id: documentId,
+        document_id: documentId || undefined,
       });
 
       setRewritten(result.rewritten_text);

@@ -64,6 +64,52 @@
   background: #fff;
 }
 
+.rewrite-source-modes {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rewrite-source-modes button {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: var(--text-main);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.rewrite-source-modes button.active {
+  border-color: #60a5fa;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.rewrite-empty-inline p {
+  color: var(--text-muted);
+}
+
+.rewrite-custom {
+  display: grid;
+  gap: 8px;
+}
+
+.rewrite-custom-textarea {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 10px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.rewrite-custom-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
 .rewrite-paragraphs {
   display: grid;
   gap: 10px;
@@ -133,6 +179,19 @@
   background: #0b1220;
   color: var(--text-main);
   border-color: var(--border-subtle);
+}
+
+:root[data-theme="dark"] .rewrite-source-modes button,
+:root[data-theme="dark"] .rewrite-custom-textarea {
+  background: #0b1220;
+  color: var(--text-main);
+  border-color: var(--border-subtle);
+}
+
+:root[data-theme="dark"] .rewrite-source-modes button.active {
+  background: #10243f;
+  color: #93c5fd;
+  border-color: #3b82f6;
 }
 
 :root[data-theme="dark"] .rewrite-back-btn:hover,
