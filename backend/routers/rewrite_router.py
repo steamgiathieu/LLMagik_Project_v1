@@ -232,7 +232,8 @@ async def rewrite_paragraph(
     if not original_text or len(original_text.strip()) < 10:
         raise HTTPException(status_code=400, detail="Nội dung đoạn văn quá ngắn để viết lại")
 
-    effective_language = _resolve_ui_language(x_ui_language)
+    source_language = _detect_source_language(original_text)
+    effective_language = source_language or _resolve_ui_language(x_ui_language)
 
     provider = get_provider()
     t0 = time.monotonic()

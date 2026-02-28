@@ -267,11 +267,18 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   console.log(`[apiFetch] Response status: ${res.status} from ${path}`);
 
   if (res.status === 401) {
-    console.log(`[apiFetch] Got 401, clearing token and dispatching logout`);
-    // Clear auth state on unauthorized
-    void tokenHelper.clear();
-    window.dispatchEvent(new Event("auth:logout"));
-    throw new ApiError(401, "Phiên đăng nhập hết hạn");
+    const body = await res.json().catch(() => ({}));
+    const detail = body?.detail ?? "Phiên đăng nhập hết hạn";
+    const isAuthEntryPoint = path === "/auth/login" || path === "/auth/register";
+
+    if (!isAuthEntryPoint) {
+      console.log(`[apiFetch] Got 401, clearing token and dispatching logout`);
+      // Clear auth state on unauthorized protected endpoints
+      void tokenHelper.clear();
+      window.dispatchEvent(new Event("auth:logout"));
+    }
+
+    throw new ApiError(401, detail);
   }
 
   if (!res.ok) {
