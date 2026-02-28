@@ -91,8 +91,8 @@ export default function Home() {
             </h1>
             <p className="dashboard-welcome-subtitle">
               {t(
-                "Sẵn sàng phân tích văn bản với AI? Hãy chọn một tính năng bên dưới để bắt đầu.",
-                "Ready to analyze text with AI? Pick a feature below to begin."
+                "Bạn có thể upload tài liệu để lưu trước, sau đó chọn cách dùng ở Chat, Viết lại hoặc Phân tích.",
+                "Upload documents to store them first, then choose how to use them in Chat, Rewrite, or Analysis."
               )}
             </p>
           </div>
@@ -104,7 +104,7 @@ export default function Home() {
               <span className="dashboard-action-icon">📄</span>
               <span className="dashboard-action-text">
                 <strong>{t("Upload tài liệu", "Upload document")}</strong>
-                <small>{t("Phân tích ngay", "Analyze now")}</small>
+                <small>{t("Lưu trước, dùng sau", "Store now, use later")}</small>
               </span>
               <span className="dashboard-action-arrow">→</span>
             </button>
@@ -188,7 +188,7 @@ export default function Home() {
             <div className="dashboard-empty">
               <div className="dashboard-empty-icon">📭</div>
               <h3>{t("Chưa có tài liệu nào", "No documents yet")}</h3>
-              <p>{t("Upload tài liệu đầu tiên để bắt đầu phân tích với AI", "Upload your first document to start analyzing with AI")}</p>
+              <p>{t("Upload tài liệu để lưu vào thư viện, rồi chọn tính năng bạn muốn dùng sau đó.", "Upload documents into your library, then choose the feature you want to use afterward.")}</p>
               <button onClick={() => setShowUpload(true)} className="dashboard-empty-btn">
                 {t("Upload tài liệu", "Upload document")}
               </button>
