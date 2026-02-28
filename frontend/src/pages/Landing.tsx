@@ -1,5 +1,5 @@
 // src/pages/Landing.tsx
-// InfoLen AI — Public landing page (foundation for future marketing site)
+// InfoLens AI — Public landing page (foundation for future marketing site)
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Landing.css";
@@ -76,7 +76,7 @@ export default function Landing() {
       <nav className="landing-nav" ref={navRef}>
         <a href="/" className="landing-nav-logo">
           <div className="landing-nav-logo-icon">✨</div>
-          <span className="landing-nav-logo-text">InfoLen AI</span>
+          <span className="landing-nav-logo-text">InfoLens AI</span>
         </a>
 
         <ul className="landing-nav-links">
@@ -115,7 +115,7 @@ export default function Landing() {
           </h1>
 
           <p className="hero-subtitle">
-            InfoLen AI giúp bạn hiểu sâu hơn về bất kỳ văn bản nào — từ phân tích
+            InfoLens AI giúp bạn hiểu sâu hơn về bất kỳ văn bản nào — từ phân tích
             cảm xúc, trích xuất ý chính đến chat trực tiếp với tài liệu.
           </p>
 
@@ -210,7 +210,7 @@ export default function Landing() {
       <footer className="landing-footer">
         <div className="landing-footer-grid">
           <div>
-            <h3 className="footer-brand-name">InfoLen AI</h3>
+            <h3 className="footer-brand-name">InfoLens AI</h3>
             <p className="footer-brand-desc">
               Nền tảng phân tích văn bản thông minh sử dụng trí tuệ nhân tạo,
               giúp bạn hiểu sâu hơn về mọi tài liệu.
@@ -243,10 +243,11 @@ export default function Landing() {
         </div>
 
         <div className="footer-bottom">
-          <span>© {new Date().getFullYear()} InfoLen AI. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} InfoLens AI. All rights reserved.</span>
           <span>Made with ❤️ in Vietnam</span>
         </div>
       </footer>
     </div>
   );
 }
+

@@ -7,6 +7,7 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Reader from "./pages/Reader";
+import Rewrite from "./pages/Rewrite";
 import History from "./pages/History";
 import Profile from "./pages/Profile";
 import LanguageSwitcher from "./components/LanguageSwitcher";
@@ -100,6 +101,15 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Reader />
+              <LanguageSwitcher />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/rewrite"
+          element={
+            <ProtectedRoute>
+              <Rewrite />
               <LanguageSwitcher />
             </ProtectedRoute>
           }

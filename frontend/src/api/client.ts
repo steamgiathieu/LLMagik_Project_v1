@@ -1,7 +1,7 @@
 // src/api/client.ts
 // Central API client — tất cả call backend đi qua đây
 
-const BASE_URL = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000";
+export const API_BASE_URL = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -244,7 +244,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     console.log(`[apiFetch] Sending request to ${path} WITHOUT token`);
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     credentials: "include",  // Still send cookies if they exist
     headers,
@@ -281,7 +281,7 @@ async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
     console.log(`[apiUpload] Sending request to ${path} WITHOUT token`);
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
     method: "POST",
     credentials: "include",  // Send cookies with upload
     body: formData,
@@ -304,6 +304,36 @@ async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
   }
 
   return res.json() as Promise<T>;
+}
+
+async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Blob> {
+  const token = tokenHelper.get();
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string> ?? {}),
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    credentials: "include",
+    headers,
+  });
+
+  if (res.status === 401) {
+    tokenHelper.clear();
+    window.dispatchEvent(new Event("auth:logout"));
+    throw new ApiError(401, "Phiên đăng nhập hết hạn");
+  }
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body?.detail ?? `HTTP ${res.status}`);
+  }
+
+  return res.blob();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -373,6 +403,9 @@ export const textsApi = {
 
   delete: (documentId: string) =>
     apiFetch<void>(`/texts/${documentId}`, { method: "DELETE" }),
+
+  getOriginalFile: (documentId: string) =>
+    apiFetchBlob(`/texts/${documentId}/original`),
 };
 
 // ─────────────────────────────────────────────────────────────

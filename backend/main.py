@@ -1,3 +1,5 @@
+import json
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -30,15 +32,39 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="InfoLen AI API",
+    title="InfoLens AI API",
     description="Backend cho ứng dụng đọc và phân tích văn bản AI",
     version="1.0.0",
     lifespan=lifespan,
 )
 
+
+def _load_cors_origins() -> list[str]:
+    raw = os.getenv("CORS_ORIGINS", "").strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                origins = [str(x).strip() for x in parsed if str(x).strip()]
+                if origins:
+                    return origins
+        except Exception:
+            pass
+
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
+
+cors_origins = _load_cors_origins()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,  # Enable credentials (cookies)
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,7 +80,7 @@ app.include_router(history_router)
 
 @app.get("/", tags=["Health"])
 def root():
-    return {"status": "ok", "message": "InfoLen AI API is running"}
+    return {"status": "ok", "message": "InfoLens AI API is running"}
 
 
 @app.get("/health", tags=["Health"])

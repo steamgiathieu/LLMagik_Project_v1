@@ -17,7 +17,7 @@ export default function Navbar() {
       <div className="navbar-brand">
         <div className="brand-icon">✨</div>
         <h1 onClick={() => navigate("/")} className="brand-title">
-          InfoLen AI
+          InfoLens AI
         </h1>
       </div>
 
@@ -48,3 +48,4 @@ export default function Navbar() {
     </nav>
   );
 }
+

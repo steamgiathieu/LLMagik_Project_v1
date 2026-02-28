@@ -6,7 +6,7 @@ Xử lý AI cho 2 tác vụ:
   2. rewrite()  — viết lại một đoạn văn theo mục tiêu
 
 Provider chọn qua AI_PROVIDER trong .env:
-  mock | openai | openrouter | anthropic
+  mock | openai | openrouter | anthropic | groq
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from dotenv import load_dotenv
+import httpx
 
 load_dotenv()
 
@@ -48,6 +49,14 @@ def _lang_instruction(language: str) -> str:
     return f"QUAN TRỌNG: Toàn bộ nội dung trong JSON (summary, main_idea, notes, v.v.) PHẢI được viết bằng {lang_name}."
 
 
+def _rewrite_language_hard_rule(language: str) -> str:
+    lang_name = LANGUAGE_NAMES.get(_normalize_language(language), "Tiếng Việt (Vietnamese)")
+    return (
+        f"RÀNG BUỘC NGÔN NGỮ CỨNG: cả 'rewritten_text' và 'explanation' PHẢI chỉ dùng {lang_name}. "
+        "Không trộn ngôn ngữ khác. Nếu đoạn gốc ở ngôn ngữ khác, hãy chuyển ngữ về đúng ngôn ngữ mục tiêu khi viết lại."
+    )
+
+
 def build_reader_system(language: str = "vi") -> str:
     language = _normalize_language(language)
     return f"""Bạn là chuyên gia phân tích văn bản từ góc độ người đọc.
@@ -64,7 +73,8 @@ def build_rewrite_system(language: str = "vi") -> str:
     language = _normalize_language(language)
     return f"""Bạn là biên tập viên chuyên nghiệp. Nhiệm vụ: viết lại MỘT đoạn văn theo mục tiêu cho trước.
 Trả về JSON hợp lệ, không có markdown, không có giải thích ngoài JSON.
-{_lang_instruction(language)}"""
+{_lang_instruction(language)}
+{_rewrite_language_hard_rule(language)}"""
 
 # Keep backward-compat constants
 READER_SYSTEM = build_reader_system("vi")
@@ -104,6 +114,7 @@ def build_rewrite_prompt(paragraph_id: str, original_text: str, goal: str, langu
 - Chỉ viết lại đoạn này, không thay đổi nội dung cốt lõi
 - Đạt mục tiêu: {goal}
 - {lang_note}
+- {_rewrite_language_hard_rule(language)}
 - Trả về JSON theo schema:
 {schema}"""
 
@@ -848,6 +859,106 @@ class OpenRouterProvider(OpenAIProvider):
 
 
 # ─────────────────────────────────────────────────────────────
+# Groq (OpenAI-compatible over HTTP)
+# ─────────────────────────────────────────────────────────────
+
+class GroqProvider(BaseAIProvider):
+    def __init__(self):
+        raw_key = (os.getenv("GROQ_API_KEY") or "").strip()
+        if raw_key.lower().startswith("bearer "):
+            raw_key = raw_key[7:].strip()
+
+        self.api_key = raw_key
+        if not self.api_key:
+            raise RuntimeError("Thiếu GROQ_API_KEY trong biến môi trường")
+        if not self.api_key.startswith("gsk_"):
+            raise RuntimeError("GROQ_API_KEY không đúng định dạng (phải bắt đầu bằng 'gsk_')")
+
+        self.model = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+        self.base_url = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
+        self.timeout_s = float(os.getenv("GROQ_TIMEOUT_SECONDS", "45"))
+
+    async def _chat_json(
+        self,
+        *,
+        system: str,
+        user: str,
+        temperature: float,
+        max_tokens: int,
+    ) -> dict[str, Any]:
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        async with httpx.AsyncClient(timeout=self.timeout_s) as client:
+            res = await client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
+
+        if res.status_code == 401:
+            raise RuntimeError(
+                "GROQ_API_KEY không hợp lệ hoặc đã hết hạn. "
+                "Vui lòng cập nhật key trong backend/.env và restart backend."
+            )
+
+        if res.status_code >= 400:
+            body = res.text[:500]
+            raise RuntimeError(f"Groq API lỗi {res.status_code}: {body}")
+
+        try:
+            data = res.json()
+        except Exception as e:
+            raise RuntimeError(f"Groq trả về JSON HTTP không hợp lệ: {e}")
+
+        content = (
+            (data.get("choices") or [{}])[0]
+            .get("message", {})
+            .get("content", "{}")
+        )
+        return _safe_parse(_message_content_to_text(content))
+
+    async def analyze(self, mode: str, paragraphs: list[dict], language: str = "vi") -> dict[str, Any]:
+        system = build_reader_system(language) if mode == "reader" else build_writer_system(language)
+        return await self._chat_json(
+            system=system,
+            user=build_analyze_prompt(mode, paragraphs, language),
+            temperature=0.3,
+            max_tokens=2048,
+        )
+
+    async def rewrite(self, paragraph_id: str, original_text: str, goal: str, language: str = "vi") -> dict[str, Any]:
+        return await self._chat_json(
+            system=build_rewrite_system(language),
+            user=build_rewrite_prompt(paragraph_id, original_text, goal, language),
+            temperature=0.6,
+            max_tokens=1024,
+        )
+
+    async def chat(
+        self,
+        question: str,
+        paragraphs: list[dict],
+        history: list[dict],
+        language: str = "vi",
+    ) -> dict[str, Any]:
+        return await self._chat_json(
+            system=build_chat_system(language),
+            user=build_chat_prompt(question, paragraphs, history, language),
+            temperature=0.3,
+            max_tokens=1024,
+        )
+
+
+# ─────────────────────────────────────────────────────────────
 # Anthropic
 # ─────────────────────────────────────────────────────────────
 
@@ -902,6 +1013,22 @@ class AnthropicProvider(BaseAIProvider):
 # Helpers
 # ─────────────────────────────────────────────────────────────
 
+def _message_content_to_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict):
+                txt = item.get("text")
+                if isinstance(txt, str):
+                    parts.append(txt)
+            elif isinstance(item, str):
+                parts.append(item)
+        return "\n".join(parts) if parts else "{}"
+    return str(content or "{}")
+
+
 def _safe_parse(raw: str) -> dict:
     raw = raw.strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
@@ -930,6 +1057,8 @@ def get_provider() -> BaseAIProvider:
         _provider_cache = OpenRouterProvider()
     elif name == "anthropic":
         _provider_cache = AnthropicProvider()
+    elif name == "groq":
+        _provider_cache = GroqProvider()
     else:
         _provider_cache = MockAIProvider()
     return _provider_cache

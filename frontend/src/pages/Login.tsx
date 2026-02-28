@@ -52,7 +52,7 @@ export default function Login() {
         <div className="auth-left-content">
           <div className="auth-brand">
             <div className="auth-brand-icon">✨</div>
-            <span className="auth-brand-name">InfoLen AI</span>
+            <span className="auth-brand-name">InfoLens AI</span>
           </div>
 
           <h2 className="auth-left-title">
@@ -246,3 +246,4 @@ export default function Login() {
     </div>
   );
 }
+

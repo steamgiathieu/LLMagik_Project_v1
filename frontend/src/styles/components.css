@@ -1,5 +1,5 @@
 /* ============================================================
-   InfoLen AI — Reusable Component Styles
+   InfoLens AI — Reusable Component Styles
    ============================================================ */
 
 /* ── Buttons ── */
@@ -342,4 +342,5 @@
   .show-mobile { display: block; }
   .btn-xl { padding: var(--space-4) var(--space-6); font-size: var(--text-base); }
 }
+
 

@@ -50,7 +50,7 @@ export default function Home() {
         <div className="dashboard-header-left">
           <div className="dashboard-brand">
             <span className="dashboard-brand-icon">✨</span>
-            <span className="dashboard-brand-name">InfoLen AI</span>
+            <span className="dashboard-brand-name">InfoLens AI</span>
           </div>
         </div>
 
@@ -289,3 +289,4 @@ export default function Home() {
     </div>
   );
 }
+

@@ -4,6 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useDocumentStore } from "@/store/documentStore";
 import { useAnalysisStore } from "@/store/analysisStore";
 import { useChatStore } from "@/store/chatStore";
+import { textsApi } from "@/api/client";
 import { ReaderView } from "@/components/Reader";
 import AnalysisPanel from "@/components/AnalysisPanel";
 import ChatBox from "@/components/ChatBox";
@@ -22,6 +23,9 @@ export default function Reader() {
 
   const [activeTab, setActiveTab] = useState<"analysis" | "chat">("analysis");
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [originalFileUrl, setOriginalFileUrl] = useState<string | null>(null);
+  const [isLoadingOriginalFile, setIsLoadingOriginalFile] = useState(false);
+  const [originalFileError, setOriginalFileError] = useState<string | null>(null);
 
   useEffect(() => {
     if (docId) {
@@ -39,6 +43,37 @@ export default function Reader() {
     if (!currentDocument || !analysisKey) return;
     analyze(currentDocument.document_id, mode, currentDocument.paragraphs).catch(() => {});
   }, [analysisKey, currentDocument, mode, analyze]);
+
+  useEffect(() => {
+    let revokedUrl: string | null = null;
+
+    const loadOriginalFile = async () => {
+      if (!currentDocument || currentDocument.source_type !== "file") {
+        setOriginalFileUrl(null);
+        setOriginalFileError(null);
+        return;
+      }
+
+      setIsLoadingOriginalFile(true);
+      setOriginalFileError(null);
+      try {
+        const blob = await textsApi.getOriginalFile(currentDocument.document_id);
+        revokedUrl = URL.createObjectURL(blob);
+        setOriginalFileUrl(revokedUrl);
+      } catch {
+        setOriginalFileUrl(null);
+        setOriginalFileError(t("Không thể mở file gốc", "Cannot open original file"));
+      } finally {
+        setIsLoadingOriginalFile(false);
+      }
+    };
+
+    loadOriginalFile();
+
+    return () => {
+      if (revokedUrl) URL.revokeObjectURL(revokedUrl);
+    };
+  }, [currentDocument, t]);
 
   const selectedParagraphText = useMemo(() => {
     if (!selectedParagraphId || !currentDocument) return null;
@@ -77,11 +112,31 @@ export default function Reader() {
             <option value="reader">{t("Chế độ Người đọc", "Reader mode")}</option>
             <option value="writer">{t("Chế độ Người viết", "Writer mode")}</option>
           </select>
+          {currentDocument.source_type === "file" && originalFileUrl && (
+            <a
+              href={originalFileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-analyze"
+            >
+              {t("Mở file gốc", "Open original file")}
+            </a>
+          )}
           <button onClick={() => setIsPreviewOpen(true)} className="btn-analyze">
             {t("Mở toàn văn bản", "Open full document")}
           </button>
         </div>
       </header>
+
+      {currentDocument.source_type === "file" && (
+        <div className="reader-inline-note">
+          {isLoadingOriginalFile && <p>{t("Đang tải file gốc...", "Loading original file...")}</p>}
+          {!isLoadingOriginalFile && originalFileError && <p>{originalFileError}</p>}
+          {!isLoadingOriginalFile && !originalFileError && originalFileUrl && (
+            <p>{t("Bạn có thể mở file gốc để xem đúng định dạng ban đầu.", "You can open the original file to keep the original layout.")}</p>
+          )}
+        </div>
+      )}
 
       <div className="reader-layout">
         <aside className="reader-sidebar reader-sidebar-left">

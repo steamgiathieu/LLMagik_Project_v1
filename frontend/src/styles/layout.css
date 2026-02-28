@@ -1,5 +1,5 @@
 /* ============================================================
-   InfoLen AI — Layout Utilities
+   InfoLens AI — Layout Utilities
    ============================================================ */
 
 /* ── Container ── */
@@ -195,4 +195,5 @@
   .page-content,
   .page-content-narrow { padding: var(--space-4); }
 }
+
 

@@ -1,6 +1,7 @@
 // src/components/RewritePanel.tsx
 import { useState } from "react";
 import { rewriteApi } from "@/api/client";
+import { useUiPreferences } from "@/lib/uiPreferences";
 import "./RewritePanel.css";
 
 interface RewritePanelProps {
@@ -14,6 +15,7 @@ export default function RewritePanel({
   originalText,
   documentId,
 }: RewritePanelProps) {
+  const { t } = useUiPreferences();
   const [goal, setGoal] = useState("");
   const [rewritten, setRewritten] = useState("");
   const [explanation, setExplanation] = useState("");
@@ -21,17 +23,17 @@ export default function RewritePanel({
   const [error, setError] = useState("");
 
   const PRESET_GOALS = [
-    "trung lập hơn",
-    "rõ ràng và súc tích hơn",
-    "trang trọng và chuyên nghiệp hơn",
-    "thân thiện và gần gũi hơn",
-    "ngắn gọn hơn",
-    "chi tiết và mở rộng hơn",
+    t("trung lập hơn", "more neutral"),
+    t("rõ ràng và súc tích hơn", "clearer and more concise"),
+    t("trang trọng và chuyên nghiệp hơn", "more formal and professional"),
+    t("thân thiện và gần gũi hơn", "friendlier and more approachable"),
+    t("ngắn gọn hơn", "shorter"),
+    t("chi tiết và mở rộng hơn", "more detailed and expanded"),
   ];
 
   const handleRewrite = async () => {
     if (!goal.trim()) {
-      setError("Vui lòng nhập mục tiêu viết lại");
+      setError(t("Vui lòng nhập mục tiêu viết lại", "Please enter a rewrite goal"));
       return;
     }
 
@@ -57,14 +59,17 @@ export default function RewritePanel({
 
   return (
     <div className="rewrite-panel">
-      <h3>✏️ Viết lại đoạn văn</h3>
+      <h3>✏️ {t("Viết lại đoạn văn", "Rewrite paragraph")}</h3>
 
       <div className="rewrite-section">
-        <label>Mục tiêu viết lại</label>
+        <label>{t("Mục tiêu viết lại", "Rewrite goal")}</label>
         <textarea
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
-          placeholder="Mô tả cách bạn muốn đoạn văn được viết lại..."
+          placeholder={t(
+            "Mô tả cách bạn muốn đoạn văn được viết lại...",
+            "Describe how you want this paragraph to be rewritten..."
+          )}
           rows={2}
           disabled={loading}
           className="rewrite-textarea"
@@ -85,7 +90,7 @@ export default function RewritePanel({
       </div>
 
       <div className="rewrite-section">
-        <label>Đoạn gốc</label>
+        <label>{t("Đoạn gốc", "Original paragraph")}</label>
         <div className="rewrite-original">
           <p>{originalText}</p>
         </div>
@@ -93,14 +98,14 @@ export default function RewritePanel({
 
       {rewritten && (
         <div className="rewrite-section">
-          <label>Đoạn được viết lại</label>
+          <label>{t("Đoạn được viết lại", "Rewritten paragraph")}</label>
           <div className="rewrite-result">
             <p>{rewritten}</p>
           </div>
 
           {explanation && (
             <div className="rewrite-explanation">
-              <strong>Giải thích:</strong>
+              <strong>{t("Giải thích", "Explanation")}:</strong>
               <p>{explanation}</p>
             </div>
           )}
@@ -114,7 +119,7 @@ export default function RewritePanel({
         disabled={loading || !goal.trim()}
         className="btn-rewrite"
       >
-        {loading ? "Đang viết lại..." : "Viết lại"}
+        {loading ? t("Đang viết lại...", "Rewriting...") : t("Viết lại", "Rewrite")}
       </button>
     </div>
   );

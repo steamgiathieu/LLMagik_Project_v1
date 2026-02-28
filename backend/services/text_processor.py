@@ -18,21 +18,47 @@ def normalize_text(text: str) -> str:
     return text.strip()
 
 
-def split_paragraphs(text: str, min_length: int = 20) -> List[str]:
+def split_paragraphs(text: str, min_length: int = 8) -> List[str]:
     """
     Chia văn bản thành danh sách đoạn.
     Đoạn được tách bởi dòng trống; đoạn quá ngắn bị bỏ qua.
     """
     raw_blocks = re.split(r"\n{2,}", text)
-    paragraphs = []
+    paragraphs: List[str] = []
+
     for block in raw_blocks:
         block = block.strip()
-        # Gộp các dòng liền kề trong cùng block
-        block = re.sub(r"\n+", " ", block)
-        block = re.sub(r" +", " ", block)
-        if len(block) >= min_length:
-            paragraphs.append(block)
-    return paragraphs
+        if not block:
+            continue
+
+        lines = [ln.strip() for ln in block.split("\n") if ln.strip()]
+        if not lines:
+            continue
+
+        # Preserve explicit bullet/list lines as separate paragraphs.
+        if all(re.match(r"^([-*•]|\d+[.)])\s+", ln) for ln in lines):
+            paragraphs.extend(lines)
+            continue
+
+        merged = " ".join(lines)
+        merged = re.sub(r"\s+", " ", merged).strip()
+        if merged:
+            paragraphs.append(merged)
+
+    # Merge orphan very-short lines into the previous paragraph only when safe.
+    refined: List[str] = []
+    for para in paragraphs:
+        if (
+            refined
+            and len(para) < min_length
+            and not re.match(r"^([-*•]|\d+[.)])\s+", para)
+            and not re.search(r"[.!?:]$", refined[-1])
+        ):
+            refined[-1] = f"{refined[-1]} {para}".strip()
+        else:
+            refined.append(para)
+
+    return [p for p in refined if p]
 
 
 def build_paragraph_list(paragraphs: List[str]) -> List[dict]:
@@ -76,6 +102,19 @@ def extract_from_url(url: str) -> str:
             or soup.find(attrs={"class": re.compile(r"(content|body|post|article)", re.I)})
             or soup.find("body")
         )
+        if content:
+            chunks: List[str] = []
+            for node in content.find_all(["h1", "h2", "h3", "h4", "p", "li", "blockquote"]):
+                txt = normalize_text(node.get_text(" ", strip=True))
+                if not txt:
+                    continue
+                # Bỏ các đoạn cực ngắn có khả năng là nhãn giao diện.
+                if len(txt) < 3:
+                    continue
+                chunks.append(txt)
+
+            if chunks:
+                return normalize_text("\n\n".join(chunks))
 
         text = content.get_text(separator="\n") if content else soup.get_text(separator="\n")
         return normalize_text(text)
@@ -186,6 +225,9 @@ def process_input(
         raise ValueError(f"source_type không hợp lệ: {source_type}")
 
     paragraphs = split_paragraphs(raw)
+    if not paragraphs and raw.strip():
+        paragraphs = [raw.strip()]
+
     return {
         "raw_text": raw,
         "title": title,

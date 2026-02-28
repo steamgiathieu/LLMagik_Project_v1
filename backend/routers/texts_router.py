@@ -1,7 +1,10 @@
 import uuid
+import os
+import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -14,6 +17,23 @@ from services.text_processor import process_input
 router = APIRouter(prefix="/texts", tags=["Text Input"])
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def _safe_filename(filename: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", filename or "uploaded_file")
+    return cleaned.strip("._") or "uploaded_file"
+
+
+def _original_file_path_from_doc_id(document_id: str) -> Optional[str]:
+    prefix = f"{document_id}__"
+    for name in os.listdir(UPLOAD_DIR):
+        if name.startswith(prefix):
+            full = os.path.join(UPLOAD_DIR, name)
+            if os.path.isfile(full):
+                return full
+    return None
 
 
 def _save_document(
@@ -21,9 +41,10 @@ def _save_document(
     source_type: str,
     processed: dict,
     user_id: Optional[int],
+    doc_id: Optional[str] = None,
 ) -> models_text.Document:
     """Lưu Document + Paragraph vào DB, trả về Document."""
-    doc_id = str(uuid.uuid4())
+    doc_id = doc_id or str(uuid.uuid4())
 
     doc = models_text.Document(
         id=doc_id,
@@ -52,16 +73,21 @@ def _save_document(
 
 
 def _doc_to_response(doc: models_text.Document) -> schemas_text.DocumentResponse:
+    para_list = [
+        schemas_text.ParagraphOut(id=p.paragraph_id, text=p.text)
+        for p in doc.paragraphs
+    ]
+
+    if not para_list and doc.raw_text and doc.raw_text.strip():
+        para_list = [schemas_text.ParagraphOut(id="P1", text=doc.raw_text.strip())]
+
     return schemas_text.DocumentResponse(
         document_id=doc.id,
         title=doc.title,
         source_type=doc.source_type,
         source_ref=doc.source_ref,
-        paragraph_count=doc.paragraph_count,
-        paragraphs=[
-            schemas_text.ParagraphOut(id=p.paragraph_id, text=p.text)
-            for p in doc.paragraphs
-        ],
+        paragraph_count=max(doc.paragraph_count, len(para_list)),
+        paragraphs=para_list,
         created_at=doc.created_at,
     )
 
@@ -142,7 +168,14 @@ async def ingest_file(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    doc = _save_document(db, "file", processed, current_user.id)
+    doc_id = str(uuid.uuid4())
+    doc = _save_document(db, "file", processed, current_user.id, doc_id=doc_id)
+
+    safe_name = _safe_filename(filename)
+    file_path = os.path.join(UPLOAD_DIR, f"{doc_id}__{safe_name}")
+    with open(file_path, "wb") as f:
+        f.write(file_bytes)
+
     return _doc_to_response(doc)
 
 
@@ -198,6 +231,35 @@ def get_document(
     return _doc_to_response(doc)
 
 
+@router.get(
+    "/{document_id}/original",
+    summary="Lấy file gốc đã upload",
+)
+def get_original_file(
+    document_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    doc = (
+        db.query(models_text.Document)
+        .filter(
+            models_text.Document.id == document_id,
+            models_text.Document.user_id == current_user.id,
+            models_text.Document.source_type == "file",
+        )
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Tài liệu không tồn tại")
+
+    file_path = _original_file_path_from_doc_id(document_id)
+    if not file_path:
+        raise HTTPException(status_code=404, detail="Không tìm thấy file gốc")
+
+    filename = os.path.basename(file_path).split("__", 1)[1] if "__" in os.path.basename(file_path) else os.path.basename(file_path)
+    return FileResponse(path=file_path, filename=filename)
+
+
 # ── DELETE /texts/{document_id} ────────────────────────────────
 @router.delete(
     "/{document_id}",
@@ -219,5 +281,11 @@ def delete_document(
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Tài liệu không tồn tại")
+    original_path = _original_file_path_from_doc_id(document_id)
     db.delete(doc)
     db.commit()
+    if original_path and os.path.exists(original_path):
+        try:
+            os.remove(original_path)
+        except OSError:
+            pass
