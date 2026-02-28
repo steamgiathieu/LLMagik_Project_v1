@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { authApi, tokenHelper } from "@/api/client";
 import { applyTheme, getStoredLanguage, getStoredTheme, normalizeLanguage, saveLanguage } from "@/lib/uiPreferences";
@@ -19,7 +19,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  return (
+    <BrowserRouter>
+      <AppShell />
+    </BrowserRouter>
+  );
+}
+
+function AppShell() {
   const { fetchMe, user, profile, logout, updateProfile } = useAuthStore();
+  const navigate = useNavigate();
   const initRef = useRef(false);
 
   useEffect(() => {
@@ -66,27 +75,35 @@ export default function App() {
         console.error("Token refresh failed:", error);
         // Token refresh failed - logout user
         await logout();
-        window.location.href = "/login";
+        navigate("/login", { replace: true });
       }
     }, 25 * 60 * 1000); // 25 minutes
 
     return () => clearInterval(refreshInterval);
-  }, [user, logout]);
+  }, [user, logout, navigate]);
 
   useEffect(() => {
     // Listen for logout events (401 from API)
     const handleLogout = () => {
-      window.location.href = "/login";
+      navigate("/login", { replace: true });
     };
     window.addEventListener("auth:logout", handleLogout);
     return () => window.removeEventListener("auth:logout", handleLogout);
-  }, []);
+  }, [navigate]);
 
   return (
-    <BrowserRouter>
+    <>
       <Routes>
         <Route path="/landing" element={<Landing />} />
-        <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+        <Route
+          path="/login"
+          element={user ? <Navigate to="/" /> : (
+            <>
+              <Login />
+              <LanguageSwitcher />
+            </>
+          )}
+        />
         <Route
           path="/"
           element={
@@ -132,8 +149,9 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
       <CreditFooter />
-    </BrowserRouter>
+    </>
   );
 }

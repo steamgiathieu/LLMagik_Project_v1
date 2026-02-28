@@ -1,7 +1,7 @@
 // src/pages/Landing.tsx
 // InfoLens AI — Public landing page (foundation for future marketing site)
 import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import "./Landing.css";
 
 const FEATURES = [
@@ -74,10 +74,10 @@ export default function Landing() {
     <div className="landing-page">
       {/* ── Navbar ── */}
       <nav className="landing-nav" ref={navRef}>
-        <a href="/" className="landing-nav-logo">
+        <Link to="/" className="landing-nav-logo">
           <div className="landing-nav-logo-icon">✨</div>
           <span className="landing-nav-logo-text">InfoLens AI</span>
-        </a>
+        </Link>
 
         <ul className="landing-nav-links">
           <li><a href="#features">Tính năng</a></li>
@@ -228,8 +228,8 @@ export default function Landing() {
           <div>
             <h4 className="footer-col-title">Tài khoản</h4>
             <ul className="footer-links">
-              <li><a href="/login">Đăng nhập</a></li>
-              <li><a href="/login">Đăng ký</a></li>
+              <li><Link to="/login">Đăng nhập</Link></li>
+              <li><Link to="/login">Đăng ký</Link></li>
             </ul>
           </div>
 
