@@ -170,7 +170,7 @@ export default function Reader() {
         <section className="reader-preview">
           <div className="preview-card">
             <div className="preview-head">
-              <h2>Đọc lướt nhanh</h2>
+              <h2>{t("Đọc lướt nhanh", "Quick preview")}</h2>
               <p>
                 {selectedParagraphId
                   ? `${t("Đang chọn", "Selected")} ${selectedParagraphId}`
@@ -194,7 +194,7 @@ export default function Reader() {
 
               {selectedParagraphText ? (
                 <div className="preview-snippet">
-                  <span>Đang chọn: {selectedParagraphText.id}</span>
+                  <span>{t("Đang chọn", "Selected")}: {selectedParagraphText.id}</span>
                   <p>{selectedParagraphText.text}</p>
                 </div>
               ) : (

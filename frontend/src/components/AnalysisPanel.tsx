@@ -1,5 +1,6 @@
 // src/components/AnalysisPanel.tsx
 import { AnalysisResult } from "@/api/client";
+import { useUiPreferences } from "@/lib/uiPreferences";
 import "./AnalysisPanel.css";
 
 interface AnalysisPanelProps {
@@ -13,32 +14,34 @@ export default function AnalysisPanel({
   selectedParagraphId,
   isAnalyzing,
 }: AnalysisPanelProps) {
+  const { t } = useUiPreferences();
+
   const formatLegacyDifficulty = (difficulty: string) => {
     const normalized = difficulty.trim().toLowerCase();
-    if (normalized === "easy") return "Dễ";
-    if (normalized === "medium") return "Trung bình";
-    if (normalized === "hard") return "Khó";
+    if (normalized === "easy") return t("Dễ", "Easy");
+    if (normalized === "medium") return t("Trung bình", "Medium");
+    if (normalized === "hard") return t("Khó", "Hard");
     return difficulty;
   };
 
   const supportLevelLabel = (level?: string | null) => {
     const normalized = (level || "").toLowerCase();
-    if (normalized === "supported") return "Có cơ sở";
-    if (normalized === "weak") return "Cơ sở yếu";
-    if (normalized === "unsupported") return "Chưa có cơ sở";
+    if (normalized === "supported") return t("Có cơ sở", "Supported");
+    if (normalized === "weak") return t("Cơ sở yếu", "Weak support");
+    if (normalized === "unsupported") return t("Chưa có cơ sở", "Unsupported");
     return level || "N/A";
   };
 
   const issueTypeLabel = (type: string) => {
     switch (type) {
       case "fallacy":
-        return "Lỗi lập luận";
+        return t("Lỗi lập luận", "Logical fallacy");
       case "conclusion_jump":
-        return "Nhảy kết luận";
+        return t("Nhảy kết luận", "Jumped conclusion");
       case "fear_appeal":
-        return "Sử dụng nỗi sợ";
+        return t("Sử dụng nỗi sợ", "Fear appeal");
       case "spelling_grammar":
-        return "Chính tả/Ngữ pháp";
+        return t("Chính tả/Ngữ pháp", "Spelling/Grammar");
       default:
         return type;
     }
@@ -49,7 +52,7 @@ export default function AnalysisPanel({
       <div className="analysis-panel">
         <div className="panel-loading">
           <div className="spinner" />
-          <p>Đang phân tích...</p>
+          <p>{t("Đang phân tích...", "Analyzing...")}</p>
         </div>
       </div>
     );
@@ -59,8 +62,8 @@ export default function AnalysisPanel({
     return (
       <div className="analysis-panel">
         <div className="panel-empty">
-          <p>Chưa có kết quả phân tích</p>
-          <p className="hint">Hệ thống đang chuẩn bị hoặc chưa đủ dữ liệu để hiển thị phân tích</p>
+          <p>{t("Chưa có kết quả phân tích", "No analysis result yet")}</p>
+          <p className="hint">{t("Hệ thống đang chuẩn bị hoặc chưa đủ dữ liệu để hiển thị phân tích", "The system is preparing or there is not enough data to display analysis")}</p>
         </div>
       </div>
     );
@@ -76,17 +79,17 @@ export default function AnalysisPanel({
         {/* Summary */}
         {result.summary && (
           <section className="panel-section">
-            <h3>📋 Tóm tắt tổng quan</h3>
+            <h3>📋 {t("Tóm tắt tổng quan", "Overview summary")}</h3>
             <p>{result.summary}</p>
           </section>
         )}
 
         {result.reader_summary_breakdown && (
           <section className="panel-section">
-            <h3>🧭 Tóm tắt nội dung chính</h3>
+            <h3>🧭 {t("Tóm tắt nội dung chính", "Main content summary")}</h3>
             {result.reader_summary_breakdown.main_points && result.reader_summary_breakdown.main_points.length > 0 && (
               <>
-                <p><strong>Ý chính</strong></p>
+                <p><strong>{t("Ý chính", "Key points")}</strong></p>
                 <ul>
                   {result.reader_summary_breakdown.main_points.map((point, i) => (
                     <li key={`mp-${i}`}>{point}</li>
@@ -96,7 +99,7 @@ export default function AnalysisPanel({
             )}
             {result.reader_summary_breakdown.figures && result.reader_summary_breakdown.figures.length > 0 && (
               <>
-                <p><strong>Số liệu (nếu có)</strong></p>
+                <p><strong>{t("Số liệu (nếu có)", "Figures (if any)")}</strong></p>
                 <ul>
                   {result.reader_summary_breakdown.figures.map((figure, i) => (
                     <li key={`fig-${i}`}>{figure}</li>
@@ -106,7 +109,7 @@ export default function AnalysisPanel({
             )}
             {result.reader_summary_breakdown.argument_flow && result.reader_summary_breakdown.argument_flow.length > 0 && (
               <>
-                <p><strong>Mạch lập luận</strong></p>
+                <p><strong>{t("Mạch lập luận", "Argument flow")}</strong></p>
                 <ul>
                   {result.reader_summary_breakdown.argument_flow.map((step, i) => (
                     <li key={`flow-${i}`}>{step}</li>
@@ -120,32 +123,32 @@ export default function AnalysisPanel({
         {/* Tone Analysis */}
         {result.tone_analysis && (
           <section className="panel-section">
-            <h3>🎨 Giọng văn</h3>
+            <h3>🎨 {t("Giọng văn", "Tone")}</h3>
             <p>
-              <strong>Tổng thể:</strong> {result.tone_analysis.overall_tone}
+              <strong>{t("Tổng thể", "Overall")}:</strong> {result.tone_analysis.overall_tone}
             </p>
             <p>
-              <strong>Cảm xúc:</strong> {result.tone_analysis.sentiment}
+              <strong>{t("Cảm xúc", "Sentiment")}:</strong> {result.tone_analysis.sentiment}
             </p>
           </section>
         )}
 
         {result.deep_style_analysis && (
           <section className="panel-section">
-            <h3>🧪 Phân tích sâu văn phong</h3>
+            <h3>🧪 {t("Phân tích sâu văn phong", "Deep style analysis")}</h3>
             <p>
-              <strong>Tông cảm xúc:</strong> {result.deep_style_analysis.emotional_tone || "N/A"}
+              <strong>{t("Tông cảm xúc", "Emotional tone")}:</strong> {result.deep_style_analysis.emotional_tone || "N/A"}
             </p>
             <p>
-              <strong>Tần số ngôn từ kích động:</strong>{" "}
+              <strong>{t("Tần số ngôn từ kích động", "Inflammatory wording frequency")}:</strong>{" "}
               {result.deep_style_analysis.inflammatory_word_frequency || "N/A"}
             </p>
             <p>
-              <strong>Độ thiên lệch nhóm:</strong> {result.deep_style_analysis.group_bias_level || "N/A"}
+              <strong>{t("Độ thiên lệch nhóm", "Group bias level")}:</strong> {result.deep_style_analysis.group_bias_level || "N/A"}
             </p>
             {result.deep_style_analysis.notes && (
               <p>
-                <strong>Nhận xét:</strong> {result.deep_style_analysis.notes}
+                <strong>{t("Nhận xét", "Notes")}:</strong> {result.deep_style_analysis.notes}
               </p>
             )}
           </section>
@@ -154,12 +157,12 @@ export default function AnalysisPanel({
         {/* Selected paragraph annotation */}
         {annotation && (
           <section className="panel-section panel-highlight">
-            <h3>💡 Đoạn {annotation.paragraph_id}</h3>
+            <h3>💡 {t("Đoạn", "Paragraph")} {annotation.paragraph_id}</h3>
             <p>
-              <strong>Ý chính:</strong> {annotation.main_idea}
+              <strong>{t("Ý chính", "Main idea")}:</strong> {annotation.main_idea}
             </p>
             <p>
-              <strong>Ghi chú:</strong> {annotation.notes}
+              <strong>{t("Ghi chú", "Notes")}:</strong> {annotation.notes}
             </p>
           </section>
         )}
@@ -167,7 +170,7 @@ export default function AnalysisPanel({
         {/* Reader mode specifics */}
         {result.key_takeaways && result.key_takeaways.length > 0 && (
           <section className="panel-section">
-            <h3>⭐ Điểm chính</h3>
+            <h3>⭐ {t("Điểm chính", "Key takeaways")}</h3>
             <ul>
               {result.key_takeaways.map((t, i) => (
                 <li key={i}>{t}</li>
@@ -178,11 +181,11 @@ export default function AnalysisPanel({
 
         {(result.readability_metrics || result.reading_difficulty) && (
           <section className="panel-section">
-            <h3>📖 Khả năng tiếp cận văn bản</h3>
+            <h3>📖 {t("Khả năng tiếp cận văn bản", "Readability")}</h3>
             {result.readability_metrics ? (
               <>
                 <p>
-                  <strong>Chỉ số tiếp cận:</strong>{" "}
+                  <strong>{t("Chỉ số tiếp cận", "Accessibility score")}:</strong>{" "}
                   <span className="readability-score">
                     {result.readability_metrics.accessibility_score ?? "N/A"}/100
                   </span>{" "}
@@ -191,34 +194,34 @@ export default function AnalysisPanel({
                     : ""}
                 </p>
                 <p>
-                  <strong>Độ dài câu trung bình:</strong>{" "}
-                  {result.readability_metrics.avg_sentence_length_words ?? "N/A"} từ/câu
+                  <strong>{t("Độ dài câu trung bình", "Average sentence length")}:</strong>{" "}
+                  {result.readability_metrics.avg_sentence_length_words ?? "N/A"} {t("từ/câu", "words/sentence")}
                 </p>
                 <p>
-                  <strong>Tỷ lệ câu dài:</strong>{" "}
+                  <strong>{t("Tỷ lệ câu dài", "Long sentence ratio")}:</strong>{" "}
                   {result.readability_metrics.long_sentence_ratio != null
                     ? `${Math.round(result.readability_metrics.long_sentence_ratio * 100)}%`
                     : "N/A"}
                 </p>
                 <p>
-                  <strong>Độ đa dạng từ vựng:</strong>{" "}
+                  <strong>{t("Độ đa dạng từ vựng", "Lexical diversity")}:</strong>{" "}
                   {result.readability_metrics.lexical_diversity != null
                     ? `${Math.round(result.readability_metrics.lexical_diversity * 100)}%`
                     : "N/A"}
                 </p>
                 <p>
-                  <strong>Phù hợp với đối tượng:</strong>{" "}
+                  <strong>{t("Phù hợp với đối tượng", "Recommended reader profile")}:</strong>{" "}
                   {result.readability_metrics.recommended_reader_profile || "N/A"}
                 </p>
                 {result.readability_metrics.note && (
                   <p>
-                    <strong>Giải thích:</strong> {result.readability_metrics.note}
+                    <strong>{t("Giải thích", "Explanation")}:</strong> {result.readability_metrics.note}
                   </p>
                 )}
               </>
             ) : (
               <p>
-                <strong>Mức độ (legacy):</strong> {formatLegacyDifficulty(result.reading_difficulty!)}
+                <strong>{t("Mức độ (legacy)", "Legacy difficulty")}:</strong> {formatLegacyDifficulty(result.reading_difficulty!)}
               </p>
             )}
           </section>
@@ -226,28 +229,28 @@ export default function AnalysisPanel({
 
         {result.claim_checks && result.claim_checks.length > 0 && (
           <section className="panel-section">
-            <h3>🔎 Kiểm chứng phát biểu chính</h3>
+            <h3>🔎 {t("Kiểm chứng phát biểu chính", "Claim checks")}</h3>
             {result.claim_checks.map((claim, i) => (
               <div key={i} className="issue-card">
                 <p>
                   <strong>{claim.paragraph_id}</strong> · {supportLevelLabel(claim.support_level)}
                 </p>
                 <p>
-                  <strong>Phát biểu:</strong> {claim.claim}
+                  <strong>{t("Phát biểu", "Claim")}:</strong> {claim.claim}
                 </p>
                 {claim.evidence_in_text && (
                   <p>
-                    <strong>Dấu hiệu chứng cứ:</strong> {claim.evidence_in_text}
+                    <strong>{t("Dấu hiệu chứng cứ", "Evidence in text")}:</strong> {claim.evidence_in_text}
                   </p>
                 )}
                 {claim.risk_if_believed && (
                   <p>
-                    <strong>Rủi ro nếu tin ngay:</strong> {claim.risk_if_believed}
+                    <strong>{t("Rủi ro nếu tin ngay", "Risk if accepted too quickly")}:</strong> {claim.risk_if_believed}
                   </p>
                 )}
                 {claim.verification_prompt && (
                   <p>
-                    <strong>Câu hỏi kiểm chứng:</strong> {claim.verification_prompt}
+                    <strong>{t("Câu hỏi kiểm chứng", "Verification prompt")}:</strong> {claim.verification_prompt}
                   </p>
                 )}
               </div>
@@ -257,16 +260,16 @@ export default function AnalysisPanel({
 
         {result.critical_reading_guard && (
           <section className="panel-section">
-            <h3>🛡️ Chốt an toàn nhận thức</h3>
+            <h3>🛡️ {t("Chốt an toàn nhận thức", "Critical reading guard")}</h3>
             <p>
-              <strong>Mức rủi ro bị dẫn dắt:</strong>{" "}
+              <strong>{t("Mức rủi ro bị dẫn dắt", "Persuasion risk")}:</strong>{" "}
               {result.critical_reading_guard.persuasion_risk || "N/A"}
             </p>
 
             {result.critical_reading_guard.manipulation_signals &&
               result.critical_reading_guard.manipulation_signals.length > 0 && (
                 <>
-                  <p><strong>Dấu hiệu thao túng</strong></p>
+                  <p><strong>{t("Dấu hiệu thao túng", "Manipulation signals")}</strong></p>
                   <ul>
                     {result.critical_reading_guard.manipulation_signals.map((s, i) => (
                       <li key={`ms-${i}`}>{s}</li>
@@ -278,7 +281,7 @@ export default function AnalysisPanel({
             {result.critical_reading_guard.missing_context_flags &&
               result.critical_reading_guard.missing_context_flags.length > 0 && (
                 <>
-                  <p><strong>Điểm thiếu bối cảnh</strong></p>
+                  <p><strong>{t("Điểm thiếu bối cảnh", "Missing context flags")}</strong></p>
                   <ul>
                     {result.critical_reading_guard.missing_context_flags.map((s, i) => (
                       <li key={`mc-${i}`}>{s}</li>
@@ -290,7 +293,7 @@ export default function AnalysisPanel({
             {result.critical_reading_guard.fact_check_actions &&
               result.critical_reading_guard.fact_check_actions.length > 0 && (
                 <>
-                  <p><strong>Hành động kiểm chứng nên làm</strong></p>
+                  <p><strong>{t("Hành động kiểm chứng nên làm", "Recommended fact-check actions")}</strong></p>
                   <ul>
                     {result.critical_reading_guard.fact_check_actions.map((s, i) => (
                       <li key={`fa-${i}`}>{s}</li>
@@ -302,7 +305,7 @@ export default function AnalysisPanel({
             {result.critical_reading_guard.alternative_views &&
               result.critical_reading_guard.alternative_views.length > 0 && (
                 <>
-                  <p><strong>Góc nhìn thay thế cần xem</strong></p>
+                  <p><strong>{t("Góc nhìn thay thế cần xem", "Alternative views to consider")}</strong></p>
                   <ul>
                     {result.critical_reading_guard.alternative_views.map((s, i) => (
                       <li key={`av-${i}`}>{s}</li>
@@ -314,7 +317,7 @@ export default function AnalysisPanel({
             {result.critical_reading_guard.do_not_conclude_yet &&
               result.critical_reading_guard.do_not_conclude_yet.length > 0 && (
                 <>
-                  <p><strong>Chưa nên kết luận vội</strong></p>
+                  <p><strong>{t("Chưa nên kết luận vội", "Do not conclude yet")}</strong></p>
                   <ul>
                     {result.critical_reading_guard.do_not_conclude_yet.map((s, i) => (
                       <li key={`dc-${i}`}>{s}</li>
@@ -327,7 +330,7 @@ export default function AnalysisPanel({
 
         {result.logic_issues && result.logic_issues.length > 0 && (
           <section className="panel-section">
-            <h3>⚠️ Vấn đề logic</h3>
+            <h3>⚠️ {t("Vấn đề logic", "Logic issues")}</h3>
             {result.logic_issues.map((issue, i) => (
               <div key={i} className="issue-card">
                 <strong>{issue.paragraph_id}:</strong> {issue.issue}
@@ -338,7 +341,7 @@ export default function AnalysisPanel({
 
         {result.logic_diagnostics && result.logic_diagnostics.length > 0 && (
           <section className="panel-section">
-            <h3>🧠 Chẩn đoán logic và ngôn ngữ</h3>
+            <h3>🧠 {t("Chẩn đoán logic và ngôn ngữ", "Logic and language diagnostics")}</h3>
             {result.logic_diagnostics.map((diag, i) => (
               <div key={i} className={`issue-card issue-${diag.severity || "low"}`}>
                 <p>
@@ -347,7 +350,7 @@ export default function AnalysisPanel({
                 <p>{diag.description}</p>
                 {diag.evidence && (
                   <p>
-                    <strong>Dấu hiệu:</strong> {diag.evidence}
+                    <strong>{t("Dấu hiệu", "Evidence")}:</strong> {diag.evidence}
                   </p>
                 )}
               </div>
@@ -358,7 +361,7 @@ export default function AnalysisPanel({
         {/* Writer mode specifics */}
         {result.style_issues && result.style_issues.length > 0 && (
           <section className="panel-section">
-            <h3>✏️ Vấn đề văn phong</h3>
+            <h3>✏️ {t("Vấn đề văn phong", "Style issues")}</h3>
             {result.style_issues.map((issue, i) => (
               <div key={i} className={`issue-card issue-${issue.severity}`}>
                 <strong>{issue.paragraph_id}:</strong> {issue.issue}
@@ -369,14 +372,14 @@ export default function AnalysisPanel({
 
         {result.rewrite_suggestions && result.rewrite_suggestions.length > 0 && (
           <section className="panel-section">
-            <h3>💭 Đề xuất viết lại</h3>
+            <h3>💭 {t("Đề xuất viết lại", "Rewrite suggestions")}</h3>
             {result.rewrite_suggestions.map((s, i) => (
               <div key={i} className="suggestion-card">
                 <p>
-                  <strong>Gốc:</strong> {s.original}
+                  <strong>{t("Gốc", "Original")}:</strong> {s.original}
                 </p>
                 <p>
-                  <strong>Đề xuất:</strong> {s.suggestion}
+                  <strong>{t("Đề xuất", "Suggestion")}:</strong> {s.suggestion}
                 </p>
               </div>
             ))}
@@ -385,19 +388,19 @@ export default function AnalysisPanel({
 
         {result.overall_score && (
           <section className="panel-section">
-            <h3>📊 Điểm tổng</h3>
+            <h3>📊 {t("Điểm tổng", "Overall score")}</h3>
             <table className="score-table">
               <tbody>
                 <tr>
-                  <td>Rõ ràng</td>
+                  <td>{t("Rõ ràng", "Clarity")}</td>
                   <td className="score">{result.overall_score.clarity}/10</td>
                 </tr>
                 <tr>
-                  <td>Mạch lạc</td>
+                  <td>{t("Mạch lạc", "Coherence")}</td>
                   <td className="score">{result.overall_score.coherence}/10</td>
                 </tr>
                 <tr>
-                  <td>Văn phong</td>
+                  <td>{t("Văn phong", "Style")}</td>
                   <td className="score">{result.overall_score.style}/10</td>
                 </tr>
               </tbody>
@@ -408,7 +411,7 @@ export default function AnalysisPanel({
 
         {result.processing_ms && (
           <div className="panel-footer">
-            <small>⏱️ Xử lý trong {result.processing_ms}ms</small>
+            <small>⏱️ {t("Xử lý trong", "Processed in")} {result.processing_ms}ms</small>
           </div>
         )}
       </div>

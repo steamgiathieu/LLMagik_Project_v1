@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { authApi, tokenHelper } from "@/api/client";
-import { applyTheme, getStoredLanguage, getStoredTheme, normalizeLanguage, saveLanguage } from "@/lib/uiPreferences";
+import { applyTheme, getStoredLanguageOrNull, getStoredTheme, normalizeLanguage, saveLanguage } from "@/lib/uiPreferences";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
@@ -48,8 +48,11 @@ function AppShell() {
   }, []);
 
   useEffect(() => {
-    const language = normalizeLanguage(profile?.language || user?.language || getStoredLanguage());
-    saveLanguage(language);
+    const stored = getStoredLanguageOrNull();
+    const language = stored || normalizeLanguage(profile?.language || user?.language || "vi");
+    if (!stored) {
+      saveLanguage(language);
+    }
     document.documentElement.lang = language;
   }, [profile?.language, user?.language]);
 

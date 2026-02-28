@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useUiPreferences } from "@/lib/uiPreferences";
 import "./ReaderView.css";
 
 export interface Paragraph {
@@ -19,6 +20,7 @@ export default function ReaderView({
   onSelectParagraph,
   selectedId = null,
 }: ReaderViewProps) {
+  const { t } = useUiPreferences();
   const [activeId, setActiveId] = useState<string | null>(selectedId);
   const [progress, setProgress] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -56,9 +58,9 @@ export default function ReaderView({
       {/* Header */}
       {title && (
         <header className="rv-header">
-          <span className="rv-header-label">ĐANG ĐỌC</span>
+          <span className="rv-header-label">{t("ĐANG ĐỌC", "READING")}</span>
           <h1 className="rv-title">{title}</h1>
-          <span className="rv-meta">{paragraphs.length} đoạn</span>
+          <span className="rv-meta">{paragraphs.length} {t("đoạn", "paragraphs")}</span>
         </header>
       )}
 
@@ -78,7 +80,7 @@ export default function ReaderView({
           {paragraphs.length === 0 && (
             <div className="rv-empty">
               <span className="rv-empty-icon">📖</span>
-              <p>Chưa có nội dung để hiển thị</p>
+              <p>{t("Chưa có nội dung để hiển thị", "No content to display")}</p>
             </div>
           )}
         </div>
@@ -89,7 +91,7 @@ export default function ReaderView({
         <span className="rv-progress-text">{progress}%</span>
         {activeId && (
           <span className="rv-selected-label">
-            Đoạn <strong>{activeId}</strong> đang chọn
+            {t("Đoạn", "Paragraph")} <strong>{activeId}</strong> {t("đang chọn", "selected")}
           </span>
         )}
       </footer>
