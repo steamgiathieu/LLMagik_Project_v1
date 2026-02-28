@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useAuthStore } from "@/store/authStore";
 
 export type SupportedLanguage = "vi" | "en";
 export type ThemeMode = "light" | "dark";
@@ -55,24 +54,22 @@ export function applyTheme(theme: ThemeMode): void {
 }
 
 export function useUiPreferences() {
-  const { profile, user } = useAuthStore();
   const resolveLanguage = () => {
     const stored = getStoredLanguageOrNull();
-    if (stored) return stored;
-    return normalizeLanguage(profile?.language || user?.language || "vi");
+    return stored || "vi";
   };
   const [language, setLanguage] = useState<SupportedLanguage>(resolveLanguage);
 
   useEffect(() => {
     setLanguage(resolveLanguage());
-  }, [profile?.language, user?.language]);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const onLanguageChange = () => setLanguage(resolveLanguage());
     window.addEventListener(LANGUAGE_CHANGE_EVENT, onLanguageChange);
     return () => window.removeEventListener(LANGUAGE_CHANGE_EVENT, onLanguageChange);
-  }, [profile?.language, user?.language]);
+  }, []);
 
   return useMemo(() => {
     const isVi = language === "vi";

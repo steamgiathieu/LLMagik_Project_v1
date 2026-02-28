@@ -1,7 +1,7 @@
 import time
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -15,6 +15,14 @@ from services.ai_service import get_provider
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 MAX_PARAGRAPHS_IN_CONTEXT = 30   # tránh context quá dài
+SUPPORTED_UI_LANGUAGES = {"vi", "en", "zh", "ja", "fr"}
+
+
+def _resolve_ui_language(x_ui_language: str | None) -> str:
+    if not x_ui_language:
+        return "vi"
+    code = x_ui_language.strip().lower()
+    return code if code in SUPPORTED_UI_LANGUAGES else "vi"
 
 
 def _get_or_create_session(
@@ -79,6 +87,7 @@ async def chat(
     payload: schemas_chat.ChatRequest,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
+    x_ui_language: str | None = Header(default=None, alias="X-UI-Language"),
 ):
     # 1. Verify document ownership
     doc = (
@@ -121,11 +130,7 @@ async def chat(
     db.add(user_msg)
     db.flush()
 
-    # 6. Get user's language preference
-    user_profile = db.query(models.UserProfile).filter(
-        models.UserProfile.user_id == current_user.id
-    ).first()
-    user_language = user_profile.language if user_profile else "vi"
+    request_language = _resolve_ui_language(x_ui_language)
 
     # 7. Call AI
     provider = get_provider()
@@ -135,7 +140,7 @@ async def chat(
             question=payload.user_question,
             paragraphs=paragraphs,
             history=history,
-            language=user_language,
+            language=request_language,
         )
     except Exception as e:
         db.rollback()

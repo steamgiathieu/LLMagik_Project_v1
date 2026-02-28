@@ -9,7 +9,7 @@ Authentication endpoints:
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import timedelta
 import os
@@ -31,17 +31,8 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 # Schemas
 # ─────────────────────────────────────────────────────────────
 
-# Supported languages
-SUPPORTED_LANGUAGES = {"vi", "en", "zh", "ja", "fr"}
 SUPPORTED_ROLES = {"reader", "writer", "both"}
 SUPPORTED_AGE_GROUPS = {"teen", "adult", "senior"}
-
-
-def _normalize_language(value: Optional[str], default: str = "vi") -> str:
-    if not value:
-        return default
-    code = value.strip().lower()
-    return code if code in SUPPORTED_LANGUAGES else default
 
 
 def _normalize_role(value: Optional[str], default: str = "reader") -> str:
@@ -60,10 +51,9 @@ def _normalize_age_group(value: Optional[str], default: str = "adult") -> str:
 class RegisterRequest(BaseModel):
     """Yêu cầu đăng ký."""
     username: str = Field(..., min_length=3, max_length=50, examples=["john_doe"])
-    email: str = Field(..., examples=["john@example.com"])
+    email: Optional[str] = Field(None, examples=["john@example.com"])
     password: str = Field(..., min_length=6, examples=["securepass123"])
     nickname: str = Field(..., min_length=1, max_length=100, examples=["John"])
-    language: Optional[str] = Field("vi", min_length=2, max_length=5, examples=["vi"])
     age_group: Optional[str] = Field("adult", examples=["adult"])
 
 
@@ -135,7 +125,6 @@ class UserWithProfileResponse(BaseModel):
 class UpdateProfileRequest(BaseModel):
     """Cập nhật profile."""
     nickname: Optional[str] = Field(None, min_length=1, max_length=100)
-    language: Optional[str] = Field(None, min_length=2, max_length=10)
     role: Optional[str] = Field(None)
     age_group: Optional[str] = Field(None)
 
@@ -158,10 +147,10 @@ def register(
     """
     Đăng ký người dùng mới.
     
-    Kiểm tra xem username và email có tồn tại chưa.
+    Kiểm tra username trùng; email là tùy chọn.
     Nếu không, tạo user mới và trả về JWT token trong cookie.
     """
-    # Check if username/email already exists
+    # Check if username already exists
     existing_username = db.query(models.User).filter(
         models.User.username == payload.username
     ).first()
@@ -171,32 +160,27 @@ def register(
             detail="Tên người dùng đã tồn tại",
         )
 
-    existing_email = db.query(models.User).filter(
-        models.User.email == payload.email
-    ).first()
+    email = (payload.email or "").strip().lower() or f"{payload.username}@llmagik.local"
+    existing_email = db.query(models.User).filter(models.User.email == email).first()
     if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email đã được sử dụng",
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email đã được sử dụng")
 
     # Create new user
     user = models.User(
         username=payload.username,
-        email=payload.email,
+        email=email,
         nickname=payload.nickname,
         hashed_password=hash_password(payload.password),
     )
     db.add(user)
     db.flush()
 
-    lang = _normalize_language(payload.language)
     age_group = _normalize_age_group(payload.age_group)
 
     # Create user profile
     profile = models.UserProfile(
         user_id=user.id,
-        language=lang,
+        language="vi",
         role="reader",
         age_group=age_group,
     )
@@ -380,7 +364,7 @@ def update_profile(
     """
     Cập nhật profile của user.
     
-    Các trường có thể cập nhật: nickname, language, role, age_group.
+    Các trường có thể cập nhật: nickname, role, age_group.
     """
     profile = db.query(models.UserProfile).filter(
         models.UserProfile.user_id == current_user.id
@@ -393,9 +377,6 @@ def update_profile(
     # Update profile fields if provided
     if payload.nickname is not None:
         current_user.nickname = payload.nickname
-
-    if payload.language is not None:
-        profile.language = _normalize_language(payload.language, profile.language or "vi")
 
     if payload.role is not None:
         profile.role = _normalize_role(payload.role, profile.role or "reader")

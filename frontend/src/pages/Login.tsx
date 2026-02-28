@@ -13,10 +13,8 @@ export default function Login() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [formData, setFormData] = useState({
     username: "",
-    email: "",
     password: "",
     nickname: "",
-    language: "vi",
     age_group: "adult",
   });
 
@@ -29,10 +27,8 @@ export default function Login() {
       } else {
         await register({
           username: formData.username,
-          email: formData.email,
           password: formData.password,
           nickname: formData.nickname,
-          language: formData.language,
           age_group: formData.age_group,
         });
       }
@@ -132,21 +128,6 @@ export default function Login() {
             {mode === "register" && (
               <>
                 <div className="auth-field">
-                  <label htmlFor="email">
-                    <span className="auth-field-icon">📧</span> Email
-                  </label>
-                  <input
-                    id="email"
-                    type="email"
-                    placeholder="your@email.com"
-                    value={formData.email}
-                    onChange={update("email")}
-                    required
-                    autoComplete="email"
-                  />
-                </div>
-
-                <div className="auth-field">
                   <label htmlFor="nickname">
                     <span className="auth-field-icon">😊</span> {t("Tên hiển thị", "Display name")}
                   </label>
@@ -158,21 +139,6 @@ export default function Login() {
                     onChange={update("nickname")}
                     required
                   />
-                </div>
-
-                <div className="auth-field">
-                  <label htmlFor="language">
-                    <span className="auth-field-icon">🌐</span> {t("Ngôn ngữ phản hồi", "Output language")}
-                  </label>
-                  <select
-                    id="language"
-                    value={formData.language}
-                    onChange={update("language")}
-                    required
-                  >
-                    <option value="vi">Tiếng Việt</option>
-                    <option value="en">English</option>
-                  </select>
                 </div>
 
                 <div className="auth-field">

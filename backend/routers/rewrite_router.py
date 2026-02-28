@@ -3,7 +3,7 @@ import re
 import time
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -15,6 +15,14 @@ import schemas_rewrite
 from services.ai_service import get_provider
 
 router = APIRouter(prefix="/rewrite", tags=["Rewrite"])
+SUPPORTED_UI_LANGUAGES = {"vi", "en", "zh", "ja", "fr"}
+
+
+def _resolve_ui_language(x_ui_language: str | None) -> str:
+    if not x_ui_language:
+        return "vi"
+    code = x_ui_language.strip().lower()
+    return code if code in SUPPORTED_UI_LANGUAGES else "vi"
 
 
 def _to_response(r: models_rewrite.RewriteRecord) -> schemas_rewrite.RewriteResponse:
@@ -184,6 +192,7 @@ async def rewrite_paragraph(
     payload: schemas_rewrite.RewriteRequest,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
+    x_ui_language: str | None = Header(default=None, alias="X-UI-Language"),
 ):
     payload_original_text = (payload.original_text or "").strip()
     original_text = payload.original_text
@@ -223,13 +232,7 @@ async def rewrite_paragraph(
     if not original_text or len(original_text.strip()) < 10:
         raise HTTPException(status_code=400, detail="Nội dung đoạn văn quá ngắn để viết lại")
 
-    # Get user's language preference
-    user_profile = db.query(models.UserProfile).filter(
-        models.UserProfile.user_id == current_user.id
-    ).first()
-    user_language = user_profile.language if user_profile else "vi"
-    source_language = _detect_source_language(original_text)
-    effective_language = source_language or user_language or "vi"
+    effective_language = _resolve_ui_language(x_ui_language)
 
     provider = get_provider()
     t0 = time.monotonic()

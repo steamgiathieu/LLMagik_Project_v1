@@ -2,6 +2,14 @@
 // Central API client — tất cả call backend đi qua đây
 
 export const API_BASE_URL = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000";
+const UI_LANGUAGE_KEY = "ui_language";
+const SUPPORTED_UI_LANGUAGES = new Set(["vi", "en", "zh", "ja", "fr"]);
+
+function getUiLanguageHeader(): string {
+  if (typeof window === "undefined") return "vi";
+  const raw = (window.localStorage.getItem(UI_LANGUAGE_KEY) || "").trim().toLowerCase();
+  return SUPPORTED_UI_LANGUAGES.has(raw) ? raw : "vi";
+}
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -18,7 +26,7 @@ export interface User {
 
 export interface UserProfile {
   user_id: number;
-  language: string;
+  language?: string;
   role: "reader" | "writer" | "both";
   age_group: string;
   updated_at: string;
@@ -240,6 +248,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string> ?? {}),
   };
+  headers["X-UI-Language"] = getUiLanguageHeader();
 
   // Add Authorization header if token exists
   if (token) {
@@ -277,6 +286,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
 async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
   const token = tokenHelper.get();
   const headers: HeadersInit = {};
+  headers["X-UI-Language"] = getUiLanguageHeader();
 
   // Add Authorization header if token exists
   if (token) {
@@ -316,6 +326,7 @@ async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Bl
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string> ?? {}),
   };
+  headers["X-UI-Language"] = getUiLanguageHeader();
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -348,10 +359,8 @@ async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Bl
 export const authApi = {
   register: (payload: {
     username: string;
-    email: string;
     password: string;
     nickname: string;
-    language?: string;
     age_group?: string;
   }) =>
     apiFetch<AuthResponse>("/auth/register", {
@@ -372,7 +381,7 @@ export const authApi = {
 
   me: () => apiFetch<UserWithProfile>("/auth/me"),
 
-  updateProfile: (payload: Partial<Pick<UserProfile, "language" | "role" | "age_group">>) =>
+  updateProfile: (payload: Partial<Pick<UserProfile, "role" | "age_group">>) =>
     apiFetch<UserProfile>("/auth/profile", {
       method: "PUT",
       body: JSON.stringify(payload),

@@ -10,7 +10,6 @@ export default function Profile() {
   const { t } = useUiPreferences();
 
   const [formData, setFormData] = useState({
-    language: profile?.language || user?.language || "vi",
     role: profile?.role || "reader",
     age_group: profile?.age_group || "adult",
   });
@@ -26,17 +25,12 @@ export default function Profile() {
   useEffect(() => {
     if (profile) {
       setFormData({
-        language: profile.language,
         role: profile.role,
         age_group: profile.age_group,
       });
       return;
     }
-
-    if (user?.language) {
-      setFormData((prev) => ({ ...prev, language: user.language ?? "vi" }));
-    }
-  }, [profile, user?.language]);
+  }, [profile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,19 +76,6 @@ export default function Profile() {
 
           <form onSubmit={handleSubmit} className="profile-form">
             <h3>{t("Cài đặt", "Settings")}</h3>
-
-            <div className="form-group">
-              <label htmlFor="language">🌐 {t("Ngôn ngữ nhận kết quả phân tích", "Language for system outputs")}</label>
-              <select
-                id="language"
-                value={formData.language}
-                onChange={(e) => setFormData({ ...formData, language: e.target.value })}
-              >
-                <option value="vi">🇻🇳 Tiếng Việt</option>
-                <option value="en">🇬🇧 English</option>
-              </select>
-              <p className="form-hint">{t("AI sẽ trả lời phân tích, chat và viết lại bằng ngôn ngữ này", "AI analysis, chat and rewrite outputs follow this language")}</p>
-            </div>
 
             <div className="form-group">
               <label htmlFor="role">{t("Vai trò", "Role")}</label>

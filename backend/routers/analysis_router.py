@@ -2,7 +2,7 @@ import os
 import time
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -15,6 +15,14 @@ from services.ai_service import get_provider
 from mongo import save_analysis_snapshot, mongo_enabled
 
 router = APIRouter(prefix="/analysis", tags=["Analysis"])
+SUPPORTED_UI_LANGUAGES = {"vi", "en", "zh", "ja", "fr"}
+
+
+def _resolve_ui_language(x_ui_language: str | None) -> str:
+    if not x_ui_language:
+        return "vi"
+    code = x_ui_language.strip().lower()
+    return code if code in SUPPORTED_UI_LANGUAGES else "vi"
 
 
 def _build_response(record: models_analysis.AnalysisResult) -> schemas_analysis.AnalyzeResponse:
@@ -93,6 +101,7 @@ async def analyze_document(
     payload: schemas_analysis.AnalyzeRequest,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
+    x_ui_language: str | None = Header(default=None, alias="X-UI-Language"),
 ):
     # Verify document belongs to user
     doc = (
@@ -109,17 +118,13 @@ async def analyze_document(
     # Convert paragraphs to plain dicts for AI service
     paragraphs = [{"id": p.id, "text": p.text} for p in payload.paragraphs]
 
-    # Get user's language preference
-    user_profile = db.query(models.UserProfile).filter(
-        models.UserProfile.user_id == current_user.id
-    ).first()
-    user_language = user_profile.language if user_profile else "vi"
+    request_language = _resolve_ui_language(x_ui_language)
 
     # Call AI
     provider = get_provider()
     t0 = time.monotonic()
     try:
-        ai_result = await provider.analyze(mode=payload.mode, paragraphs=paragraphs, language=user_language)
+        ai_result = await provider.analyze(mode=payload.mode, paragraphs=paragraphs, language=request_language)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI service lỗi: {e}")
     elapsed_ms = int((time.monotonic() - t0) * 1000)

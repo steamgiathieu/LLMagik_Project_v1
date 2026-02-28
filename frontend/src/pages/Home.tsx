@@ -4,14 +4,14 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 import { useDocumentStore } from "@/store/documentStore";
 import UploadModal from "@/components/UploadModal";
-import { normalizeLanguage, useUiPreferences } from "@/lib/uiPreferences";
+import { useUiPreferences } from "@/lib/uiPreferences";
 import "./Home.css";
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user, profile, logout } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { documents, fetchDocuments, deleteDocument, isLoading } = useDocumentStore();
-  const { t, dateLocale } = useUiPreferences();
+  const { t, dateLocale, language: currentLang } = useUiPreferences();
   const [showUpload, setShowUpload] = useState(false);
 
   useEffect(() => {
@@ -41,7 +41,6 @@ export default function Home() {
   };
 
   const recentDocs = documents.slice(0, 4);
-  const currentLang = normalizeLanguage(user?.language || profile?.language || "vi");
 
   return (
     <div className="dashboard-page">

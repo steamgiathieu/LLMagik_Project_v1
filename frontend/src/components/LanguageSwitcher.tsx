@@ -1,6 +1,5 @@
 // src/components/LanguageSwitcher.tsx
 import { useState } from "react";
-import { useAuthStore } from "@/store/authStore";
 import {
   applyTheme,
   getStoredTheme,
@@ -10,7 +9,6 @@ import {
   ThemeMode,
   useUiPreferences,
 } from "@/lib/uiPreferences";
-import { tokenHelper } from "@/api/client";
 import "./LanguageSwitcher.css";
 
 const LANGUAGES = [
@@ -19,26 +17,16 @@ const LANGUAGES = [
 ];
 
 export default function LanguageSwitcher() {
-  const { user, updateProfile } = useAuthStore();
   const { language: currentLang, t } = useUiPreferences();
   const [isOpen, setIsOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getStoredTheme());
 
   const currentLanguage = LANGUAGES.find((lang) => lang.code === currentLang) || LANGUAGES[0];
 
-  const handleLanguageChange = async (langCode: string) => {
+  const handleLanguageChange = (langCode: string) => {
     setIsOpen(false);
     const normalized = saveLanguage(normalizeLanguage(langCode));
     document.documentElement.lang = normalized;
-
-    // On login/register screen (not authenticated), only persist locally.
-    if (!user || !tokenHelper.exists()) return;
-
-    try {
-      await updateProfile({ language: normalized });
-    } catch (error) {
-      console.error("Failed to update language:", error);
-    }
   };
 
   const handleThemeChange = (nextTheme: ThemeMode) => {

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 import { authApi, tokenHelper } from "@/api/client";
-import { applyTheme, getStoredLanguageOrNull, getStoredTheme, normalizeLanguage, saveLanguage } from "@/lib/uiPreferences";
+import { applyTheme, getStoredLanguageOrNull, getStoredTheme, saveLanguage } from "@/lib/uiPreferences";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
@@ -27,7 +27,7 @@ export default function App() {
 }
 
 function AppShell() {
-  const { fetchMe, user, profile, logout, updateProfile } = useAuthStore();
+  const { fetchMe, user, logout } = useAuthStore();
   const navigate = useNavigate();
   const initRef = useRef(false);
 
@@ -49,20 +49,12 @@ function AppShell() {
 
   useEffect(() => {
     const stored = getStoredLanguageOrNull();
-    const language = stored || normalizeLanguage(profile?.language || user?.language || "vi");
+    const language = stored || "vi";
     if (!stored) {
       saveLanguage(language);
     }
     document.documentElement.lang = language;
-  }, [profile?.language, user?.language]);
-
-  useEffect(() => {
-    if (!profile?.language) return;
-    const normalized = normalizeLanguage(profile.language);
-    if (profile.language !== normalized) {
-      updateProfile({ language: normalized }).catch(() => {});
-    }
-  }, [profile?.language, updateProfile]);
+  }, []);
 
   useEffect(() => {
     // Auto-refresh token every 25 minutes (token expires in 30 minutes)
