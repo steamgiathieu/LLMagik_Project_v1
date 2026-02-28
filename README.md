@@ -30,7 +30,7 @@ InfoLens AI/
 │   │   ├── ai_service.py      # AI provider abstraction (Mock/OpenAI/Anthropic)
 │   │   └── text_processor.py  # Text utilities
 │   ├── requirements.txt
-│   ├── .env.example
+│   ├── .env
 │   └── test_imports.py
 │
 ├── frontend/                   # React + Vite frontend
@@ -67,7 +67,7 @@ InfoLens AI/
 │   ├── package.json
 │   ├── tsconfig.json
 │   ├── vite.config.ts
-│   ├── .env.example
+│   ├── .env
 │   └── public/
 │
 ├── start.sh                   # Bash startup script (Linux/Mac)
@@ -114,9 +114,8 @@ pip install -r requirements.txt
 # Generate SECRET_KEY
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 
-# Configure .env
-cp .env.example .env
-# Edit .env and paste the generated SECRET_KEY
+# Configure .env (single source of truth)
+# Edit backend/.env and paste the generated SECRET_KEY
 
 # Run backend
 uvicorn main:app --reload --port 8000
@@ -129,8 +128,7 @@ cd frontend
 # Install dependencies
 npm install
 
-# Create .env if not exists
-cp .env.example .env
+# Configure .env (single source of truth)
 # VITE_API_URL should be http://localhost:8000
 
 # Run dev server
@@ -450,7 +448,7 @@ Test all endpoints in Swagger UI: http://localhost:8000/docs
 
 1. **[Setup & Run](README.md#-quick-start)** - Start both servers
 2. **[Test Application](DEBUGGING_GUIDE.md#-next-steps---testing--validation)** - Validate all features  
-3. **[Configure AI](backend/.env.example)** - Set real AI provider
+3. **[Configure AI](backend/.env)** - Set real AI provider
 4. **[Deploy to Production](backend/SETUP_GUIDE.md#deployment)** - Go live
 
 ---
