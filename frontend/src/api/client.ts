@@ -20,8 +20,8 @@ const envApiBaseUrl = normalizeApiBaseUrl((import.meta as any).env?.VITE_API_URL
 const inferredApiBaseUrl = normalizeApiBaseUrl(inferRenderBackendUrl());
 
 export const API_BASE_URL = envApiBaseUrl || inferredApiBaseUrl || "http://localhost:8000";
-const API_TIMEOUT_MS = Number((import.meta as any).env?.VITE_API_TIMEOUT_MS || 12000);
-const API_AUTH_TIMEOUT_MS = Number((import.meta as any).env?.VITE_API_AUTH_TIMEOUT_MS || 8000);
+const API_TIMEOUT_MS = Number((import.meta as any).env?.VITE_API_TIMEOUT_MS || 15000);
+const API_AUTH_TIMEOUT_MS = Number((import.meta as any).env?.VITE_API_AUTH_TIMEOUT_MS || 20000);
 const UI_LANGUAGE_KEY = "ui_language";
 const SUPPORTED_UI_LANGUAGES = new Set(["vi", "en", "zh", "ja", "fr"]);
 

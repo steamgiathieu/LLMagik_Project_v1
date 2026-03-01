@@ -5,12 +5,14 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 from fastapi import HTTPException, status
 from pymongo import ASCENDING, DESCENDING, MongoClient, ReturnDocument
 from pymongo.database import Database
 from pymongo.errors import InvalidURI
+from pymongo.uri_parser import parse_uri
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=False)
 load_dotenv(override=False)
@@ -18,6 +20,7 @@ load_dotenv(override=False)
 logger = logging.getLogger(__name__)
 _mongo_client: MongoClient | None = None
 _mongo_db: Database | None = None
+_last_mongo_init_error: str | None = None
 _BASE_DIR = Path(__file__).resolve().parent
 
 
@@ -73,13 +76,50 @@ def _db_name_from_uri(uri: str) -> str:
     return db_part or os.getenv("MONGODB_DB_NAME", "llmagik")
 
 
+def _normalize_mongo_uri(raw: str) -> str:
+    value = (raw or "").strip()
+    if not value:
+        return ""
+
+    # Common deployment copy/paste issue: wrapping URI in quotes or angle brackets.
+    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+        value = value[1:-1].strip()
+    if value.startswith("<") and value.endswith(">"):
+        value = value[1:-1].strip()
+
+    try:
+        parse_uri(value)
+        return value
+    except Exception:
+        pass
+
+    # Best-effort fix for unescaped special chars in username/password.
+    try:
+        if "://" in value and "@" in value:
+            scheme, rest = value.split("://", 1)
+            auth, tail = rest.split("@", 1)
+            if ":" in auth:
+                username, password = auth.split(":", 1)
+                repaired = f"{scheme}://{quote_plus(username)}:{quote_plus(password)}@{tail}"
+                parse_uri(repaired)
+                return repaired
+    except Exception:
+        pass
+
+    return value
+
+
 def _resolve_uri() -> str:
-    return (
+    raw = (
         os.getenv("MONGODB_URI", "").strip()
         or os.getenv("MONGODB_URL", "").strip()
         or os.getenv("MONGO_URI", "").strip()
         or os.getenv("MONGO_URL", "").strip()
+        or os.getenv("DATABASE_URL", "").strip()
     )
+    if raw.startswith("mongodb://") or raw.startswith("mongodb+srv://"):
+        return _normalize_mongo_uri(raw)
+    return ""
 
 
 def _ensure_indexes(db: Database) -> None:
@@ -109,31 +149,35 @@ def _ensure_indexes(db: Database) -> None:
 
 
 def init_mongo() -> None:
-    global _mongo_client, _mongo_db
+    global _mongo_client, _mongo_db, _last_mongo_init_error
 
     uri = _resolve_uri()
     if not uri:
         logger.warning("MongoDB disabled: missing URI (MONGODB_URI/MONGODB_URL/MONGO_URI/MONGO_URL)")
         _mongo_client = None
         _mongo_db = None
+        _last_mongo_init_error = "Missing MongoDB URI env variable"
         return
 
     try:
         _mongo_client = MongoClient(
             uri,
-            serverSelectionTimeoutMS=int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "8000")),
+            serverSelectionTimeoutMS=int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "15000")),
         )
         _mongo_client.admin.command("ping")
         _mongo_db = _mongo_client[_db_name_from_uri(uri)]
         _ensure_indexes(_mongo_db)
+        _last_mongo_init_error = None
         logger.info("MongoDB initialized: db=%s", _mongo_db.name)
     except InvalidURI as exc:
         _mongo_client = None
         _mongo_db = None
+        _last_mongo_init_error = f"Invalid MongoDB URI: {exc}"
         logger.warning("MongoDB disabled due to invalid URI: %s", exc)
-    except Exception:
+    except Exception as exc:
         _mongo_client = None
         _mongo_db = None
+        _last_mongo_init_error = str(exc)
         logger.exception("MongoDB init failed")
 
 
@@ -147,7 +191,13 @@ def close_mongo() -> None:
 
 def get_mongo_db() -> Database:
     if _mongo_db is None:
-        raise RuntimeError("MongoDB is not initialized")
+        # Lazy re-init: useful when startup init failed due to cold-start/network race.
+        init_mongo()
+    if _mongo_db is None:
+        detail = "MongoDB is not initialized"
+        if _last_mongo_init_error:
+            detail = f"{detail}: {_last_mongo_init_error}"
+        raise RuntimeError(detail)
     return _mongo_db
 
 
@@ -174,6 +224,7 @@ def get_persistence_status() -> dict[str, Any]:
         "mongo_uri_present": uri_present,
         "mongo_connection_ok": connection_ok,
         "mongo_db_name": db_name,
+        "mongo_init_error": _last_mongo_init_error,
         "persistent_data_root": str(root),
     }
 
