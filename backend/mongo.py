@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ _mongo_client: MongoClient | None = None
 _mongo_db: Database | None = None
 _last_mongo_init_error: str | None = None
 _last_mongo_uri_source: str | None = None
+_next_mongo_retry_at_monotonic: float = 0.0
 _BASE_DIR = Path(__file__).resolve().parent
 
 
@@ -260,7 +262,7 @@ def _ensure_indexes(db: Database) -> None:
 
 
 def init_mongo() -> None:
-    global _mongo_client, _mongo_db, _last_mongo_init_error
+    global _mongo_client, _mongo_db, _last_mongo_init_error, _next_mongo_retry_at_monotonic
 
     uri = _resolve_uri()
     if not uri:
@@ -271,6 +273,7 @@ def init_mongo() -> None:
         present = _present_mongo_related_env_keys()
         present_suffix = f"; present keys={present}" if present else ""
         _last_mongo_init_error = f"Missing MongoDB URI env variable (checked {checked}){present_suffix}"
+        _next_mongo_retry_at_monotonic = time.monotonic() + float(os.getenv("MONGO_RETRY_COOLDOWN_SECONDS", "8"))
         return
 
     try:
@@ -293,6 +296,13 @@ def init_mongo() -> None:
             if ca_file:
                 client_kwargs["tlsCAFile"] = ca_file
 
+            # Atlas + restricted egress environments may fail OCSP endpoint checks.
+            # Keep this configurable and enabled by default for better compatibility.
+            client_kwargs["tlsDisableOCSPEndpointCheck"] = _env_bool(
+                "MONGO_TLS_DISABLE_OCSP_ENDPOINT_CHECK",
+                True,
+            )
+
             if _env_bool("MONGO_TLS_ALLOW_INVALID_CERTS", False):
                 client_kwargs["tlsAllowInvalidCertificates"] = True
                 client_kwargs["tlsAllowInvalidHostnames"] = True
@@ -302,11 +312,13 @@ def init_mongo() -> None:
         _mongo_db = _mongo_client[_db_name_from_uri(uri)]
         _ensure_indexes(_mongo_db)
         _last_mongo_init_error = None
+        _next_mongo_retry_at_monotonic = 0.0
         logger.info("MongoDB initialized: db=%s", _mongo_db.name)
     except InvalidURI as exc:
         _mongo_client = None
         _mongo_db = None
         _last_mongo_init_error = f"Invalid MongoDB URI: {exc}"
+        _next_mongo_retry_at_monotonic = time.monotonic() + float(os.getenv("MONGO_RETRY_COOLDOWN_SECONDS", "8"))
         logger.warning("MongoDB disabled due to invalid URI: %s", exc)
     except Exception as exc:
         # Fallback for environments with problematic TLS trust chain.
@@ -326,6 +338,7 @@ def init_mongo() -> None:
                 _mongo_client = retry_client
                 _mongo_db = retry_db
                 _last_mongo_init_error = None
+                _next_mongo_retry_at_monotonic = 0.0
                 logger.warning(
                     "MongoDB initialized using insecure TLS fallback. "
                     "Set MONGO_TLS_ALLOW_INVALID_CERTS=true only for temporary diagnostics."
@@ -335,31 +348,39 @@ def init_mongo() -> None:
                 _mongo_client = None
                 _mongo_db = None
                 _last_mongo_init_error = f"{exc} | insecure TLS fallback failed: {retry_exc}"
+                _next_mongo_retry_at_monotonic = time.monotonic() + float(os.getenv("MONGO_RETRY_COOLDOWN_SECONDS", "8"))
                 logger.exception("MongoDB init failed (including insecure TLS fallback)")
                 return
 
         _mongo_client = None
         _mongo_db = None
         _last_mongo_init_error = str(exc)
+        _next_mongo_retry_at_monotonic = time.monotonic() + float(os.getenv("MONGO_RETRY_COOLDOWN_SECONDS", "8"))
         logger.exception("MongoDB init failed")
 
 
 def close_mongo() -> None:
-    global _mongo_client, _mongo_db
+    global _mongo_client, _mongo_db, _next_mongo_retry_at_monotonic
     if _mongo_client is not None:
         _mongo_client.close()
     _mongo_client = None
     _mongo_db = None
+    _next_mongo_retry_at_monotonic = 0.0
 
 
 def get_mongo_db() -> Database:
     if _mongo_db is None:
-        # Lazy re-init: useful when startup init failed due to cold-start/network race.
-        init_mongo()
+        # Lazy re-init with short cooldown to avoid blocking every auth request.
+        now = time.monotonic()
+        if now >= _next_mongo_retry_at_monotonic:
+            init_mongo()
     if _mongo_db is None:
+        retry_after = max(0.0, _next_mongo_retry_at_monotonic - time.monotonic())
         detail = "MongoDB is not initialized"
         if _last_mongo_init_error:
             detail = f"{detail}: {_last_mongo_init_error}"
+        if retry_after > 0:
+            detail = f"{detail} | retry_after_seconds={retry_after:.1f}"
         raise RuntimeError(detail)
     return _mongo_db
 
@@ -384,6 +405,7 @@ def get_persistence_status() -> dict[str, Any]:
     uri_present = bool(resolved_uri)
     connection_ok = mongo_enabled()
     db_name = _mongo_db.name if _mongo_db is not None else None
+    retry_after = max(0.0, _next_mongo_retry_at_monotonic - time.monotonic())
     return {
         "mongo_uri_present": uri_present,
         "mongo_uri_source": _last_mongo_uri_source,
@@ -391,6 +413,8 @@ def get_persistence_status() -> dict[str, Any]:
         "mongo_connection_ok": connection_ok,
         "mongo_db_name": db_name,
         "mongo_init_error": _last_mongo_init_error,
+        "mongo_retry_after_seconds": round(retry_after, 2),
+        "mongo_tls_disable_ocsp_endpoint_check": _env_bool("MONGO_TLS_DISABLE_OCSP_ENDPOINT_CHECK", True),
         "mongo_present_env_keys": _present_mongo_related_env_keys(),
         "persistent_data_root": str(root),
     }
