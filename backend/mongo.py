@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 _mongo_client: MongoClient | None = None
 _mongo_db: Database | None = None
 _last_mongo_init_error: str | None = None
+_last_mongo_uri_source: str | None = None
 _BASE_DIR = Path(__file__).resolve().parent
 
 
@@ -109,16 +110,96 @@ def _normalize_mongo_uri(raw: str) -> str:
     return value
 
 
+def _extract_mongo_uri_candidate(raw: str) -> str:
+    value = (raw or "").strip()
+    if not value:
+        return ""
+
+    lower = value.lower()
+    if lower.startswith("mongodb://") or lower.startswith("mongodb+srv://"):
+        return value
+
+    # Handle env-style payload pasted as value, e.g.:
+    # "MONGODB_URL=mongodb+srv://..." or "export MONGODB_URL=..."
+    if lower.startswith("export "):
+        value = value[7:].strip()
+
+    if "=" in value:
+        _, rhs = value.split("=", 1)
+        rhs = rhs.strip()
+        rhs_lower = rhs.lower()
+        if rhs_lower.startswith("mongodb://") or rhs_lower.startswith("mongodb+srv://"):
+            return rhs
+
+    return ""
+
+
+def _read_secret_file(path: str) -> str:
+    try:
+        p = Path(path).expanduser().resolve()
+        if not p.exists() or not p.is_file():
+            return ""
+        return p.read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
+
+
+def _get_env_case_insensitive(name: str) -> tuple[str, str | None]:
+    exact = os.getenv(name)
+    if exact is not None and str(exact).strip():
+        return str(exact).strip(), name
+
+    target = name.lower()
+    for k, raw in os.environ.items():
+        if k.strip().lower() == target and str(raw).strip():
+            return str(raw).strip(), k
+    return "", None
+
+
+def _get_env_or_file(name: str) -> tuple[str, str | None]:
+    value, source = _get_env_case_insensitive(name)
+    if value:
+        return value, source
+
+    file_value, file_source = _get_env_case_insensitive(f"{name}_FILE")
+    if file_value:
+        from_file = _read_secret_file(file_value)
+        if from_file:
+            return from_file, file_source
+    return "", None
+
+
+def _present_mongo_related_env_keys() -> list[str]:
+    expected = {
+        "MONGODB_URI",
+        "MONGODB_URL",
+        "MONGO_URI",
+        "MONGO_URL",
+        "DATABASE_URL",
+        "MONGODB_URI_FILE",
+        "MONGODB_URL_FILE",
+        "MONGO_URI_FILE",
+        "MONGO_URL_FILE",
+        "DATABASE_URL_FILE",
+    }
+    keys = [k for k in os.environ.keys() if k.strip().upper() in expected]
+    keys.sort()
+    return keys
+
+
 def _resolve_uri() -> str:
-    raw = (
-        os.getenv("MONGODB_URI", "").strip()
-        or os.getenv("MONGODB_URL", "").strip()
-        or os.getenv("MONGO_URI", "").strip()
-        or os.getenv("MONGO_URL", "").strip()
-        or os.getenv("DATABASE_URL", "").strip()
-    )
-    if raw.startswith("mongodb://") or raw.startswith("mongodb+srv://"):
-        return _normalize_mongo_uri(raw)
+    global _last_mongo_uri_source
+
+    for key in ("MONGODB_URI", "MONGODB_URL", "MONGO_URI", "MONGO_URL", "DATABASE_URL"):
+        raw, source = _get_env_or_file(key)
+        if not raw:
+            continue
+        candidate = _extract_mongo_uri_candidate(raw)
+        if candidate:
+            _last_mongo_uri_source = source or key
+            return _normalize_mongo_uri(candidate)
+
+    _last_mongo_uri_source = None
     return ""
 
 
@@ -156,7 +237,10 @@ def init_mongo() -> None:
         logger.warning("MongoDB disabled: missing URI (MONGODB_URI/MONGODB_URL/MONGO_URI/MONGO_URL)")
         _mongo_client = None
         _mongo_db = None
-        _last_mongo_init_error = "Missing MongoDB URI env variable"
+        checked = "MONGODB_URI/MONGODB_URL/MONGO_URI/MONGO_URL/DATABASE_URL (+ *_FILE)"
+        present = _present_mongo_related_env_keys()
+        present_suffix = f"; present keys={present}" if present else ""
+        _last_mongo_init_error = f"Missing MongoDB URI env variable (checked {checked}){present_suffix}"
         return
 
     try:
@@ -222,9 +306,11 @@ def get_persistence_status() -> dict[str, Any]:
     db_name = _mongo_db.name if _mongo_db is not None else None
     return {
         "mongo_uri_present": uri_present,
+        "mongo_uri_source": _last_mongo_uri_source,
         "mongo_connection_ok": connection_ok,
         "mongo_db_name": db_name,
         "mongo_init_error": _last_mongo_init_error,
+        "mongo_present_env_keys": _present_mongo_related_env_keys(),
         "persistent_data_root": str(root),
     }
 
