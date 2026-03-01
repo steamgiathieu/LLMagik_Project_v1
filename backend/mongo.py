@@ -25,6 +25,14 @@ _last_mongo_uri_source: str | None = None
 _BASE_DIR = Path(__file__).resolve().parent
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    value = str(raw).strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 def _ensure_dir(path: Path) -> bool:
     try:
         path.mkdir(parents=True, exist_ok=True)
@@ -244,9 +252,32 @@ def init_mongo() -> None:
         return
 
     try:
+        client_kwargs: dict[str, Any] = {
+            "serverSelectionTimeoutMS": int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "15000")),
+            "connectTimeoutMS": int(os.getenv("MONGO_CONNECT_TIMEOUT_MS", "20000")),
+            "socketTimeoutMS": int(os.getenv("MONGO_SOCKET_TIMEOUT_MS", "20000")),
+            "tls": _env_bool("MONGO_TLS_ENABLED", True),
+        }
+
+        if client_kwargs["tls"]:
+            ca_file = os.getenv("MONGO_TLS_CA_FILE", "").strip()
+            if not ca_file:
+                try:
+                    import certifi  # type: ignore
+
+                    ca_file = certifi.where()
+                except Exception:
+                    ca_file = ""
+            if ca_file:
+                client_kwargs["tlsCAFile"] = ca_file
+
+            if _env_bool("MONGO_TLS_ALLOW_INVALID_CERTS", False):
+                client_kwargs["tlsAllowInvalidCertificates"] = True
+                client_kwargs["tlsAllowInvalidHostnames"] = True
+
         _mongo_client = MongoClient(
             uri,
-            serverSelectionTimeoutMS=int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "15000")),
+            **client_kwargs,
         )
         _mongo_client.admin.command("ping")
         _mongo_db = _mongo_client[_db_name_from_uri(uri)]
