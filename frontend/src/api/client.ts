@@ -20,6 +20,8 @@ const envApiBaseUrl = normalizeApiBaseUrl((import.meta as any).env?.VITE_API_URL
 const inferredApiBaseUrl = normalizeApiBaseUrl(inferRenderBackendUrl());
 
 export const API_BASE_URL = envApiBaseUrl || inferredApiBaseUrl || "http://localhost:8000";
+const API_TIMEOUT_MS = Number((import.meta as any).env?.VITE_API_TIMEOUT_MS || 12000);
+const API_AUTH_TIMEOUT_MS = Number((import.meta as any).env?.VITE_API_AUTH_TIMEOUT_MS || 8000);
 const UI_LANGUAGE_KEY = "ui_language";
 const SUPPORTED_UI_LANGUAGES = new Set(["vi", "en", "zh", "ja", "fr"]);
 
@@ -229,11 +231,27 @@ export class ApiError extends Error {
   }
 }
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      throw new ApiError(408, "Yêu cầu quá thời gian, vui lòng thử lại");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // Token Storage (localStorage) - define early for apiFetch
 // ─────────────────────────────────────────────────────────────
 
 const TOKEN_KEY = "access_token";
+const AUTH_TOKEN_EXCLUDED_PATHS = new Set(["/auth/login", "/auth/register"]);
 
 function parseJwtExp(token: string): number | null {
   try {
@@ -276,6 +294,9 @@ export const tokenHelper = {
   save: (token: string) => {
     localStorage.setItem(TOKEN_KEY, token);
   },
+  clearLocal: () => {
+    localStorage.removeItem(TOKEN_KEY);
+  },
   clear: async () => {
     localStorage.removeItem(TOKEN_KEY);
     // Best-effort cookie cleanup without going through apiFetch 401 handler.
@@ -299,7 +320,8 @@ export const tokenHelper = {
 // ─────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const requestToken = tokenHelper.get();
+  const shouldAttachToken = !AUTH_TOKEN_EXCLUDED_PATHS.has(path);
+  const requestToken = shouldAttachToken ? tokenHelper.get() : null;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string> ?? {}),
@@ -309,18 +331,14 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   // Add Authorization header if token exists
   if (requestToken) {
     headers["Authorization"] = `Bearer ${requestToken}`;
-    console.log(`[apiFetch] Sending request to ${path} with token`);
-  } else {
-    console.log(`[apiFetch] Sending request to ${path} WITHOUT token`);
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const timeoutMs = path.startsWith("/auth/") ? API_AUTH_TIMEOUT_MS : API_TIMEOUT_MS;
+  const res = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
     ...options,
     credentials: "include",  // Still send cookies if they exist
     headers,
-  });
-
-  console.log(`[apiFetch] Response status: ${res.status} from ${path}`);
+  }, timeoutMs);
 
   if (res.status === 401) {
     const body = await res.json().catch(() => ({}));
@@ -330,11 +348,8 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     if (!isAuthEntryPoint) {
       // Guard against stale in-flight requests logging out a newly authenticated session.
       if (shouldInvalidateAuthForUnauthorized(requestToken)) {
-        console.log(`[apiFetch] Got 401, clearing token and dispatching logout`);
-        void tokenHelper.clear();
+        tokenHelper.clearLocal();
         window.dispatchEvent(new Event("auth:logout"));
-      } else {
-        console.log(`[apiFetch] Got stale 401 for old token, ignoring forced logout`);
       }
     }
 
@@ -358,28 +373,20 @@ async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
   // Add Authorization header if token exists
   if (requestToken) {
     headers["Authorization"] = `Bearer ${requestToken}`;
-    console.log(`[apiUpload] Sending request to ${path} with token`);
-  } else {
-    console.log(`[apiUpload] Sending request to ${path} WITHOUT token`);
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
     method: "POST",
     credentials: "include",  // Send cookies with upload
     body: formData,
     headers,
     // NOTE: không set Content-Type — browser tự set multipart/form-data + boundary
-  });
-
-  console.log(`[apiUpload] Response status: ${res.status} from ${path}`);
+  }, API_TIMEOUT_MS);
 
   if (res.status === 401) {
     if (shouldInvalidateAuthForUnauthorized(requestToken)) {
-      console.log(`[apiUpload] Got 401, clearing token and dispatching logout`);
-      void tokenHelper.clear();
+      tokenHelper.clearLocal();
       window.dispatchEvent(new Event("auth:logout"));
-    } else {
-      console.log(`[apiUpload] Got stale 401 for old token, ignoring forced logout`);
     }
     throw new ApiError(401, "Phiên đăng nhập hết hạn");
   }
@@ -403,15 +410,15 @@ async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Bl
     headers["Authorization"] = `Bearer ${requestToken}`;
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
     ...options,
     credentials: "include",
     headers,
-  });
+  }, API_TIMEOUT_MS);
 
   if (res.status === 401) {
     if (shouldInvalidateAuthForUnauthorized(requestToken)) {
-      void tokenHelper.clear();
+      tokenHelper.clearLocal();
       window.dispatchEvent(new Event("auth:logout"));
     }
     throw new ApiError(401, "Phiên đăng nhập hết hạn");

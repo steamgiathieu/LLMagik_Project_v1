@@ -36,8 +36,10 @@ function AppShell() {
     // Restore session on app load (only once)
     if (!initRef.current) {
       initRef.current = true;
+      const route = (window.location.hash || "").toLowerCase();
+      const onLoginRoute = route.includes("/login");
       // Only fetch user if token exists (user previously logged in)
-      if (tokenHelper.exists()) {
+      if (tokenHelper.exists() && !onLoginRoute) {
         void fetchMe({ background: true });
       }
     }

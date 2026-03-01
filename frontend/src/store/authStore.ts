@@ -27,15 +27,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await authApi.login(username, password);
-      console.log("Login response:", res);
-      
-      // Save token to localStorage
       tokenHelper.save(res.access_token);
-      console.log("Token saved, current token:", tokenHelper.get());
-      
-      // Fetch full profile so UI always has language/age_group immediately
-      const me = await authApi.me();
-      set({ user: me, profile: me.profile, isLoading: false });
+      // Do not block login UX on an extra /auth/me round-trip.
+      set({ user: res.user, profile: null, isLoading: false });
     } catch (err: any) {
       console.error("Login error:", err);
       set({ error: err.message, isLoading: false });
@@ -47,15 +41,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await authApi.register(data);
-      console.log("Register response:", res);
-      
-      // Save token to localStorage
       tokenHelper.save(res.access_token);
-      console.log("Token saved, current token:", tokenHelper.get());
-      
-      // Fetch full profile so UI always has language/age_group immediately
-      const me = await authApi.me();
-      set({ user: me, profile: me.profile, isLoading: false });
+      // Do not block register UX on an extra /auth/me round-trip.
+      set({ user: res.user, profile: null, isLoading: false });
     } catch (err: any) {
       console.error("Register error:", err);
       set({ error: err.message, isLoading: false });
