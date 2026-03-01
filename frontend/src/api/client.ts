@@ -246,6 +246,29 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, tim
   }
 }
 
+async function readBackendHealthDiagnostic(): Promise<string | null> {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE_URL}/health/persistence`, {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        "X-UI-Language": getUiLanguageHeader(),
+      },
+    }, 4000);
+
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => null) as any;
+    if (!body || typeof body !== "object") return null;
+
+    if (body.mongo_connection_ok === false && typeof body.mongo_init_error === "string" && body.mongo_init_error.trim()) {
+      return `MongoDB unavailable: ${body.mongo_init_error}`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // Token Storage (localStorage) - define early for apiFetch
 // ─────────────────────────────────────────────────────────────
@@ -334,11 +357,23 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   }
 
   const timeoutMs = path.startsWith("/auth/") ? API_AUTH_TIMEOUT_MS : API_TIMEOUT_MS;
-  const res = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
-    ...options,
-    credentials: "include",  // Still send cookies if they exist
-    headers,
-  }, timeoutMs);
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(`${API_BASE_URL}${path}`, {
+      ...options,
+      credentials: "include",  // Still send cookies if they exist
+      headers,
+    }, timeoutMs);
+  } catch (err: any) {
+    // Improve auth timeout diagnostics with backend health context.
+    if (err instanceof ApiError && err.status === 408 && path.startsWith("/auth/")) {
+      const diagnostic = await readBackendHealthDiagnostic();
+      if (diagnostic) {
+        throw new ApiError(503, diagnostic);
+      }
+    }
+    throw err;
+  }
 
   if (res.status === 401) {
     const body = await res.json().catch(() => ({}));

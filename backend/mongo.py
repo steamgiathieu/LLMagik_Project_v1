@@ -278,7 +278,7 @@ def init_mongo() -> None:
 
     try:
         client_kwargs: dict[str, Any] = {
-            "serverSelectionTimeoutMS": int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "15000")),
+            "serverSelectionTimeoutMS": int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "8000")),
             "connectTimeoutMS": int(os.getenv("MONGO_CONNECT_TIMEOUT_MS", "20000")),
             "socketTimeoutMS": int(os.getenv("MONGO_SOCKET_TIMEOUT_MS", "20000")),
             "tls": _env_bool("MONGO_TLS_ENABLED", True),
@@ -296,16 +296,19 @@ def init_mongo() -> None:
             if ca_file:
                 client_kwargs["tlsCAFile"] = ca_file
 
-            # Atlas + restricted egress environments may fail OCSP endpoint checks.
-            # Keep this configurable and enabled by default for better compatibility.
-            client_kwargs["tlsDisableOCSPEndpointCheck"] = _env_bool(
+            # Keep TLS options explicit and mutually exclusive.
+            ocsp_disabled = _env_bool(
                 "MONGO_TLS_DISABLE_OCSP_ENDPOINT_CHECK",
-                True,
+                False,
             )
+            allow_invalid = _env_bool("MONGO_TLS_ALLOW_INVALID_CERTS", False)
 
-            if _env_bool("MONGO_TLS_ALLOW_INVALID_CERTS", False):
+            # Do not enable both simultaneously.
+            if allow_invalid:
                 client_kwargs["tlsAllowInvalidCertificates"] = True
                 client_kwargs["tlsAllowInvalidHostnames"] = True
+            elif ocsp_disabled:
+                client_kwargs["tlsDisableOCSPEndpointCheck"] = True
 
         _mongo_client = MongoClient(uri, **client_kwargs)
         _mongo_client.admin.command("ping")
@@ -323,10 +326,13 @@ def init_mongo() -> None:
     except Exception as exc:
         # Fallback for environments with problematic TLS trust chain.
         allow_invalid = _env_bool("MONGO_TLS_ALLOW_INVALID_CERTS", False)
-        can_retry_insecure = bool(client_kwargs.get("tls")) and not allow_invalid
+        try_insecure_fallback = _env_bool("MONGO_TRY_INSECURE_FALLBACK", False)
+        can_retry_insecure = bool(client_kwargs.get("tls")) and not allow_invalid and try_insecure_fallback
 
         if can_retry_insecure:
             insecure_kwargs = dict(client_kwargs)
+            # Ensure mutually exclusive TLS knobs in fallback path as well.
+            insecure_kwargs.pop("tlsDisableOCSPEndpointCheck", None)
             insecure_kwargs["tlsAllowInvalidCertificates"] = True
             insecure_kwargs["tlsAllowInvalidHostnames"] = True
             try:
@@ -341,7 +347,7 @@ def init_mongo() -> None:
                 _next_mongo_retry_at_monotonic = 0.0
                 logger.warning(
                     "MongoDB initialized using insecure TLS fallback. "
-                    "Set MONGO_TLS_ALLOW_INVALID_CERTS=true only for temporary diagnostics."
+                    "Enable only for temporary diagnostics."
                 )
                 return
             except Exception as retry_exc:
