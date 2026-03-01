@@ -16,20 +16,14 @@ def test_imports():
     
     tests = [
         ("FastAPI", "from fastapi import FastAPI"),
-        ("SQLAlchemy", "from sqlalchemy import create_engine"),
         ("Pydantic", "from pydantic import BaseModel"),
         ("Python-dotenv", "from dotenv import load_dotenv"),
-        ("Passlib", "from passlib.context import CryptContext"),
         ("PyJWT", "from jose import jwt"),
+        ("PyMongo", "from pymongo import MongoClient"),
         
-        # Project modules
-        ("database", "import database"),
+        # Project modules (MongoDB stack)
+        ("mongo", "import mongo"),
         ("auth", "import auth"),
-        ("models", "import models"),
-        ("models_text", "import models_text"),
-        ("models_analysis", "import models_analysis"),
-        ("models_rewrite", "import models_rewrite"),
-        ("models_chat", "import models_chat"),
         
         # Services
         ("text_processor", "from services.text_processor import process_input"),
@@ -48,10 +42,10 @@ def test_imports():
         try:
             exec(import_stmt)
             successes.append(name)
-            print(f"✓ {name:<30} OK")
+            print(f"[OK]   {name:<30}")
         except Exception as e:
             errors.append((name, str(e)))
-            print(f"✗ {name:<30} FAILED: {str(e)[:50]}")
+            print(f"[FAIL] {name:<30} {str(e)[:50]}")
     
     # Print summary
     print("\n" + "="*60)
@@ -63,7 +57,7 @@ def test_imports():
             print(f"  - {name}: {error}")
         return False
     else:
-        print("\n✓ All imports successful! Backend is ready to start.")
+        print("\nAll imports successful. Backend is ready to start.")
         return True
 
 if __name__ == "__main__":

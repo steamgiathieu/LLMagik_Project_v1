@@ -4,20 +4,16 @@ routers/history_router.py
 Lịch sử hoạt động tập trung — gom analysis, rewrite, chat sessions.
 Tất cả endpoints đều yêu cầu xác thực.
 """
-from typing import List, Optional
+
 from datetime import datetime
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from pymongo.database import Database
 
-from database import get_db
-from auth import get_current_user
-import models
-import models_analysis
-import models_rewrite
-import models_chat
-import models_text
+from auth import AuthUser, get_current_user
+from mongo import get_mongo_db_dependency, next_sequence, utcnow
 
 router = APIRouter(prefix="/history", tags=["History"])
 
@@ -45,8 +41,8 @@ class RewriteHistoryEntry(BaseModel):
     document_title: Optional[str]
     paragraph_id: str
     goal: str
-    original_preview: str        # first 100 chars of original
-    rewritten_preview: str       # first 100 chars of rewritten
+    original_preview: str
+    rewritten_preview: str
     ai_provider: Optional[str]
     processing_ms: Optional[int]
     timestamp: datetime
@@ -89,18 +85,20 @@ class SaveAnalysisHistoryResponse(BaseModel):
 # Helpers
 # ─────────────────────────────────────────────────────────────
 
-def _doc_title(db: Session, document_id: Optional[str]) -> Optional[str]:
+def _doc_title(db: Database, document_id: Optional[str], user_id: int) -> Optional[str]:
     if not document_id:
         return None
-    doc = db.query(models_text.Document).filter(models_text.Document.id == document_id).first()
-    return doc.title if doc else None
+    doc = db["documents"].find_one(
+        {"document_id": document_id, "user_id": user_id},
+        {"_id": 0, "title": 1},
+    )
+    return str(doc.get("title") or "").strip() or None if doc else None
 
 
 # ─────────────────────────────────────────────────────────────
 # Endpoints
 # ─────────────────────────────────────────────────────────────
 
-# ── POST /history/analysis (lưu thủ công nếu cần) ─────────────
 @router.post(
     "/analysis",
     response_model=SaveAnalysisHistoryResponse,
@@ -113,17 +111,12 @@ def _doc_title(db: Session, document_id: Optional[str]) -> Optional[str]:
 )
 def save_analysis_history(
     payload: SaveAnalysisHistoryRequest,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    # Verify document ownership
-    doc = (
-        db.query(models_text.Document)
-        .filter(
-            models_text.Document.id == payload.document_id,
-            models_text.Document.user_id == current_user.id,
-        )
-        .first()
+    doc = db["documents"].find_one(
+        {"document_id": payload.document_id, "user_id": current_user.id},
+        {"_id": 0, "document_id": 1},
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Tài liệu không tồn tại")
@@ -131,29 +124,28 @@ def save_analysis_history(
     if payload.mode not in ("reader", "writer"):
         raise HTTPException(status_code=400, detail="mode phải là 'reader' hoặc 'writer'")
 
-    record = models_analysis.AnalysisResult(
-        document_id=payload.document_id,
-        user_id=current_user.id,
-        mode=payload.mode,
-        ai_provider="manual",
-        result={},
-        result_summary=payload.result_summary,
-        processing_ms=None,
-    )
-    db.add(record)
-    db.commit()
-    db.refresh(record)
+    record = {
+        "analysis_id": next_sequence("analysis_id"),
+        "document_id": payload.document_id,
+        "user_id": current_user.id,
+        "mode": payload.mode,
+        "ai_provider": "manual",
+        "result": {},
+        "result_summary": payload.result_summary,
+        "processing_ms": None,
+        "created_at": utcnow(),
+    }
+    db["analyses"].insert_one(record)
 
     return SaveAnalysisHistoryResponse(
-        history_id=record.id,
-        document_id=record.document_id,
-        mode=record.mode,
-        result_summary=record.result_summary,
-        timestamp=record.created_at,
+        history_id=int(record["analysis_id"]),
+        document_id=str(record["document_id"]),
+        mode=str(record["mode"]),
+        result_summary=record.get("result_summary"),
+        timestamp=record.get("created_at", utcnow()),
     )
 
 
-# ── GET /history/analysis ──────────────────────────────────────
 @router.get(
     "/analysis",
     response_model=List[AnalysisHistoryEntry],
@@ -164,36 +156,38 @@ def get_analysis_history(
     document_id: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    q = (
-        db.query(models_analysis.AnalysisResult)
-        .filter(models_analysis.AnalysisResult.user_id == current_user.id)
-    )
+    query: dict = {"user_id": current_user.id}
     if mode:
-        q = q.filter(models_analysis.AnalysisResult.mode == mode)
+        query["mode"] = mode
     if document_id:
-        q = q.filter(models_analysis.AnalysisResult.document_id == document_id)
+        query["document_id"] = document_id
 
-    records = q.order_by(models_analysis.AnalysisResult.created_at.desc()).offset(offset).limit(limit).all()
+    records = list(
+        db["analyses"]
+        .find(query, {"_id": 0})
+        .sort("created_at", -1)
+        .skip(offset)
+        .limit(limit)
+    )
 
     return [
         AnalysisHistoryEntry(
-            history_id=r.id,
-            document_id=r.document_id,
-            document_title=_doc_title(db, r.document_id),
-            mode=r.mode,
-            result_summary=r.result_summary,
-            ai_provider=r.ai_provider,
-            processing_ms=r.processing_ms,
-            timestamp=r.created_at,
+            history_id=int(r["analysis_id"]),
+            document_id=str(r["document_id"]),
+            document_title=_doc_title(db, r.get("document_id"), current_user.id),
+            mode=str(r.get("mode", "reader")),
+            result_summary=r.get("result_summary"),
+            ai_provider=r.get("ai_provider"),
+            processing_ms=r.get("processing_ms"),
+            timestamp=r.get("created_at", utcnow()),
         )
         for r in records
     ]
 
 
-# ── GET /history/rewrites ──────────────────────────────────────
 @router.get(
     "/rewrites",
     response_model=List[RewriteHistoryEntry],
@@ -203,36 +197,38 @@ def get_rewrite_history(
     document_id: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    q = (
-        db.query(models_rewrite.RewriteRecord)
-        .filter(models_rewrite.RewriteRecord.user_id == current_user.id)
-    )
+    query: dict = {"user_id": current_user.id}
     if document_id:
-        q = q.filter(models_rewrite.RewriteRecord.document_id == document_id)
+        query["document_id"] = document_id
 
-    records = q.order_by(models_rewrite.RewriteRecord.created_at.desc()).offset(offset).limit(limit).all()
+    records = list(
+        db["rewrites"]
+        .find(query, {"_id": 0})
+        .sort("created_at", -1)
+        .skip(offset)
+        .limit(limit)
+    )
 
     return [
         RewriteHistoryEntry(
-            history_id=r.id,
-            document_id=r.document_id,
-            document_title=_doc_title(db, r.document_id),
-            paragraph_id=r.paragraph_id,
-            goal=r.goal,
-            original_preview=r.original_text[:100],
-            rewritten_preview=r.rewritten_text[:100],
-            ai_provider=r.ai_provider,
-            processing_ms=r.processing_ms,
-            timestamp=r.created_at,
+            history_id=int(r["rewrite_id"]),
+            document_id=r.get("document_id"),
+            document_title=_doc_title(db, r.get("document_id"), current_user.id),
+            paragraph_id=str(r.get("paragraph_id", "")),
+            goal=str(r.get("goal", "")),
+            original_preview=str(r.get("original_text") or "")[:100],
+            rewritten_preview=str(r.get("rewritten_text") or "")[:100],
+            ai_provider=r.get("ai_provider"),
+            processing_ms=r.get("processing_ms"),
+            timestamp=r.get("created_at", utcnow()),
         )
         for r in records
     ]
 
 
-# ── GET /history/chats ─────────────────────────────────────────
 @router.get(
     "/chats",
     response_model=List[ChatHistoryEntry],
@@ -242,135 +238,144 @@ def get_chat_history(
     document_id: Optional[str] = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    q = (
-        db.query(models_chat.ChatSession)
-        .filter(models_chat.ChatSession.user_id == current_user.id)
-    )
+    query: dict = {"user_id": current_user.id}
     if document_id:
-        q = q.filter(models_chat.ChatSession.document_id == document_id)
+        query["document_id"] = document_id
 
-    sessions = q.order_by(models_chat.ChatSession.created_at.desc()).offset(offset).limit(limit).all()
+    sessions = list(
+        db["chat_sessions"]
+        .find(query, {"_id": 0})
+        .sort("created_at", -1)
+        .skip(offset)
+        .limit(limit)
+    )
 
-    entries = []
+    entries: list[ChatHistoryEntry] = []
     for s in sessions:
-        user_msgs = [m for m in s.messages if m.role == "user"]
-        last_q = user_msgs[-1].content[:120] if user_msgs else None
+        sid = int(s["session_id"])
+        message_count = db["chat_messages"].count_documents({"session_id": sid})
+        last_user = db["chat_messages"].find_one(
+            {"session_id": sid, "role": "user"},
+            {"_id": 0, "content": 1},
+            sort=[("message_id", -1)],
+        )
+        last_q = (last_user or {}).get("content")
         entries.append(
             ChatHistoryEntry(
-                history_id=s.id,
-                document_id=s.document_id,
-                document_title=_doc_title(db, s.document_id),
-                message_count=len(s.messages),
-                last_question=last_q,
-                timestamp=s.created_at,
+                history_id=sid,
+                document_id=str(s.get("document_id", "")),
+                document_title=_doc_title(db, s.get("document_id"), current_user.id),
+                message_count=message_count,
+                last_question=(str(last_q)[:120] if last_q else None),
+                timestamp=s.get("created_at", utcnow()),
             )
         )
     return entries
 
 
-# ── GET /history/all ───────────────────────────────────────────
 @router.get(
     "/all",
     summary="Tất cả hoạt động gần nhất (analysis + rewrite + chat)",
 )
 def get_all_history(
     limit: int = Query(30, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
     uid = current_user.id
 
-    analyses = (
-        db.query(models_analysis.AnalysisResult)
-        .filter(models_analysis.AnalysisResult.user_id == uid)
-        .order_by(models_analysis.AnalysisResult.created_at.desc())
-        .limit(limit).all()
+    analyses = list(
+        db["analyses"]
+        .find({"user_id": uid}, {"_id": 0})
+        .sort("created_at", -1)
+        .limit(limit)
     )
-    rewrites = (
-        db.query(models_rewrite.RewriteRecord)
-        .filter(models_rewrite.RewriteRecord.user_id == uid)
-        .order_by(models_rewrite.RewriteRecord.created_at.desc())
-        .limit(limit).all()
+    rewrites = list(
+        db["rewrites"]
+        .find({"user_id": uid}, {"_id": 0})
+        .sort("created_at", -1)
+        .limit(limit)
     )
-    chats = (
-        db.query(models_chat.ChatSession)
-        .filter(models_chat.ChatSession.user_id == uid)
-        .order_by(models_chat.ChatSession.created_at.desc())
-        .limit(limit).all()
+    chats = list(
+        db["chat_sessions"]
+        .find({"user_id": uid}, {"_id": 0})
+        .sort("created_at", -1)
+        .limit(limit)
     )
 
-    items = []
+    items: list[dict] = []
     for r in analyses:
-        items.append({
-            "type": "analysis",
-            "id": r.id,
-            "document_id": r.document_id,
-            "document_title": _doc_title(db, r.document_id),
-            "mode": r.mode,
-            "result_summary": r.result_summary,
-            "timestamp": r.created_at.isoformat(),
-        })
+        created_at = r.get("created_at", utcnow())
+        items.append(
+            {
+                "type": "analysis",
+                "id": int(r["analysis_id"]),
+                "document_id": r.get("document_id"),
+                "document_title": _doc_title(db, r.get("document_id"), uid),
+                "mode": r.get("mode"),
+                "result_summary": r.get("result_summary"),
+                "timestamp": created_at.isoformat() if isinstance(created_at, datetime) else str(created_at),
+            }
+        )
     for r in rewrites:
-        items.append({
-            "type": "rewrite",
-            "id": r.id,
-            "document_id": r.document_id,
-            "document_title": _doc_title(db, r.document_id),
-            "paragraph_id": r.paragraph_id,
-            "goal": r.goal,
-            "timestamp": r.created_at.isoformat(),
-        })
+        created_at = r.get("created_at", utcnow())
+        items.append(
+            {
+                "type": "rewrite",
+                "id": int(r["rewrite_id"]),
+                "document_id": r.get("document_id"),
+                "document_title": _doc_title(db, r.get("document_id"), uid),
+                "paragraph_id": r.get("paragraph_id"),
+                "goal": r.get("goal"),
+                "timestamp": created_at.isoformat() if isinstance(created_at, datetime) else str(created_at),
+            }
+        )
     for s in chats:
-        items.append({
-            "type": "chat",
-            "id": s.id,
-            "document_id": s.document_id,
-            "document_title": _doc_title(db, s.document_id),
-            "message_count": len(s.messages),
-            "timestamp": s.created_at.isoformat(),
-        })
+        sid = int(s["session_id"])
+        message_count = db["chat_messages"].count_documents({"session_id": sid})
+        created_at = s.get("created_at", utcnow())
+        items.append(
+            {
+                "type": "chat",
+                "id": sid,
+                "document_id": s.get("document_id"),
+                "document_title": _doc_title(db, s.get("document_id"), uid),
+                "message_count": message_count,
+                "timestamp": created_at.isoformat() if isinstance(created_at, datetime) else str(created_at),
+            }
+        )
 
-    # Sort by timestamp desc, take top limit
     items.sort(key=lambda x: x["timestamp"], reverse=True)
     return items[:limit]
 
 
-# ── GET /history/stats ─────────────────────────────────────────
 @router.get(
     "/stats",
     response_model=HistoryStatsResponse,
     summary="Thống kê hoạt động của người dùng",
 )
 def get_stats(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
     uid = current_user.id
 
-    analyses = (
-        db.query(models_analysis.AnalysisResult)
-        .filter(models_analysis.AnalysisResult.user_id == uid)
-        .all()
-    )
-    rewrites_count = (
-        db.query(models_rewrite.RewriteRecord)
-        .filter(models_rewrite.RewriteRecord.user_id == uid)
-        .count()
-    )
-    chat_count = (
-        db.query(models_chat.ChatSession)
-        .filter(models_chat.ChatSession.user_id == uid)
-        .count()
-    )
+    analyses = list(db["analyses"].find({"user_id": uid}, {"_id": 0, "mode": 1, "document_id": 1}))
+    rewrites_count = db["rewrites"].count_documents({"user_id": uid})
+    chat_count = db["chat_sessions"].count_documents({"user_id": uid})
 
-    by_mode: dict = {}
-    doc_freq: dict = {}
+    by_mode: dict[str, int] = {}
+    doc_freq: dict[str, int] = {}
     for a in analyses:
-        by_mode[a.mode] = by_mode.get(a.mode, 0) + 1
-        doc_freq[a.document_id] = doc_freq.get(a.document_id, 0) + 1
+        mode = str(a.get("mode") or "reader")
+        by_mode[mode] = by_mode.get(mode, 0) + 1
+        did = a.get("document_id")
+        if did:
+            dids = str(did)
+            doc_freq[dids] = doc_freq.get(dids, 0) + 1
 
     most_active_doc_id = max(doc_freq, key=doc_freq.get) if doc_freq else None
 
@@ -380,11 +385,10 @@ def get_stats(
         total_chat_sessions=chat_count,
         analyses_by_mode=by_mode,
         most_active_document_id=most_active_doc_id,
-        most_active_document_title=_doc_title(db, most_active_doc_id),
+        most_active_document_title=_doc_title(db, most_active_doc_id, uid),
     )
 
 
-# ── DELETE /history/analysis/{history_id} ─────────────────────
 @router.delete(
     "/analysis/{history_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -392,18 +396,14 @@ def get_stats(
 )
 def delete_analysis_entry(
     history_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    record = (
-        db.query(models_analysis.AnalysisResult)
-        .filter(
-            models_analysis.AnalysisResult.id == history_id,
-            models_analysis.AnalysisResult.user_id == current_user.id,
-        )
-        .first()
+    record = db["analyses"].find_one(
+        {"analysis_id": history_id, "user_id": current_user.id},
+        {"_id": 1},
     )
     if not record:
         raise HTTPException(status_code=404, detail="Không tìm thấy mục lịch sử")
-    db.delete(record)
-    db.commit()
+    db["analyses"].delete_one({"analysis_id": history_id, "user_id": current_user.id})
+

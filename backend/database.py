@@ -3,6 +3,9 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 import os
 import hashlib
 import sqlite3
+import logging
+import tempfile
+import time
 from pathlib import Path
 from datetime import datetime, timezone
 from time import monotonic
@@ -25,6 +28,11 @@ _MONGO_SNAPSHOT_META_COLLECTION = "sqlite_snapshot_meta"
 _MONGO_SNAPSHOT_FILES_BUCKET = "sqlite_snapshot_files"
 _SNAPSHOT_DOC_ID = "llmagik_main"
 _BACKUP_MIN_INTERVAL_SECONDS = float(os.getenv("SQLITE_BACKUP_INTERVAL_SECONDS", "8"))
+_MONGO_SERVER_SELECTION_TIMEOUT_MS = int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "8000"))
+_MONGO_RESTORE_RETRIES = int(os.getenv("MONGO_RESTORE_RETRIES", "4"))
+_MONGO_RESTORE_RETRY_DELAY_SECONDS = float(os.getenv("MONGO_RESTORE_RETRY_DELAY_SECONDS", "1.5"))
+
+logger = logging.getLogger(__name__)
 
 _mongo_snapshot_client: MongoClient | None = None
 _last_backup_monotonic: float = 0.0
@@ -39,7 +47,17 @@ def _ensure_dir(path: Path) -> bool:
 
 
 def _mongo_uri() -> str:
-    raw = (os.getenv("MONGODB_URI", "").strip() or os.getenv("MONGODB_URL", "").strip())
+    candidates = [
+        os.getenv("MONGODB_URI", "").strip(),
+        os.getenv("MONGODB_URL", "").strip(),
+        os.getenv("MONGO_URI", "").strip(),
+        os.getenv("MONGO_URL", "").strip(),
+    ]
+    db_url = os.getenv("DATABASE_URL", "").strip()
+    if db_url.startswith("mongodb://") or db_url.startswith("mongodb+srv://"):
+        candidates.append(db_url)
+
+    raw = next((x for x in candidates if x), "")
     if not raw:
         return ""
 
@@ -106,19 +124,68 @@ def _sqlite_path_from_url(url: str) -> Path | None:
     return Path(raw)
 
 
-def _get_mongo_snapshot_db():
+def _get_mongo_snapshot_db(force_reconnect: bool = False):
     global _mongo_snapshot_client
     uri = _mongo_uri()
     if not uri:
         return None
 
     try:
+        if force_reconnect and _mongo_snapshot_client is not None:
+            try:
+                _mongo_snapshot_client.close()
+            except Exception:
+                pass
+            _mongo_snapshot_client = None
+
         if _mongo_snapshot_client is None:
-            _mongo_snapshot_client = MongoClient(uri, serverSelectionTimeoutMS=2500)
+            _mongo_snapshot_client = MongoClient(
+                uri,
+                serverSelectionTimeoutMS=_MONGO_SERVER_SELECTION_TIMEOUT_MS,
+            )
+        _mongo_snapshot_client.admin.command("ping")
         db_name = _mongo_db_name_from_uri(uri)
         return _mongo_snapshot_client[db_name]
     except Exception:
+        logger.exception("Mongo snapshot DB is unavailable")
         return None
+
+
+def _sqlite_snapshot_bytes(path: Path) -> bytes:
+    """
+    Get a consistent SQLite snapshot including WAL changes.
+    """
+    tmp_path: Path | None = None
+    src = None
+    dst = None
+    try:
+        with tempfile.NamedTemporaryFile(prefix="llmagik_snapshot_", suffix=".db", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+
+        src = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+        dst = sqlite3.connect(tmp_path.as_posix())
+        src.backup(dst)
+        dst.commit()
+        return tmp_path.read_bytes()
+    except Exception:
+        logger.exception("SQLite backup API failed, falling back to direct file read")
+        return path.read_bytes()
+    finally:
+        try:
+            if src is not None:
+                src.close()
+        except Exception:
+            pass
+        try:
+            if dst is not None:
+                dst.close()
+        except Exception:
+            pass
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 def _restore_sqlite_from_mongo_if_needed(sqlite_path: Path) -> None:
@@ -126,45 +193,55 @@ def _restore_sqlite_from_mongo_if_needed(sqlite_path: Path) -> None:
     if sqlite_path.exists() and _sqlite_has_user_data(sqlite_path):
         return
 
-    db = _get_mongo_snapshot_db()
-    if db is None:
-        return
+    for attempt in range(_MONGO_RESTORE_RETRIES):
+        db = _get_mongo_snapshot_db(force_reconnect=(attempt > 0))
+        if db is None:
+            if attempt < _MONGO_RESTORE_RETRIES - 1:
+                time.sleep(_MONGO_RESTORE_RETRY_DELAY_SECONDS)
+            continue
 
-    try:
-        payload = None
+        try:
+            payload = None
 
-        # Preferred storage: GridFS + metadata doc.
-        meta_col = db[_MONGO_SNAPSHOT_META_COLLECTION]
-        meta = meta_col.find_one({"_id": _SNAPSHOT_DOC_ID})
-        if meta and meta.get("file_id") is not None:
-            fs = GridFS(db, collection=_MONGO_SNAPSHOT_FILES_BUCKET)
-            try:
-                payload = fs.get(meta["file_id"]).read()
-            except NoFile:
-                payload = None
+            # Preferred storage: GridFS + metadata doc.
+            meta_col = db[_MONGO_SNAPSHOT_META_COLLECTION]
+            meta = meta_col.find_one({"_id": _SNAPSHOT_DOC_ID})
+            if meta and meta.get("file_id") is not None:
+                fs = GridFS(db, collection=_MONGO_SNAPSHOT_FILES_BUCKET)
+                try:
+                    payload = fs.get(meta["file_id"]).read()
+                except NoFile:
+                    payload = None
 
-        # Backward compatibility with old inline payload document.
-        if payload is None:
-            legacy_col = db[_MONGO_SNAPSHOT_COLLECTION]
-            legacy_doc = legacy_col.find_one({"_id": _SNAPSHOT_DOC_ID})
-            payload = legacy_doc.get("payload") if legacy_doc else None
+            # Backward compatibility with old inline payload document.
+            if payload is None:
+                legacy_col = db[_MONGO_SNAPSHOT_COLLECTION]
+                legacy_doc = legacy_col.find_one({"_id": _SNAPSHOT_DOC_ID})
+                payload = legacy_doc.get("payload") if legacy_doc else None
 
-        if not payload:
+            if not payload:
+                return
+
+            sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(sqlite_path, "wb") as f:
+                f.write(bytes(payload))
+        except Exception:
+            logger.exception("Mongo restore attempt %s/%s failed", attempt + 1, _MONGO_RESTORE_RETRIES)
+            if attempt < _MONGO_RESTORE_RETRIES - 1:
+                time.sleep(_MONGO_RESTORE_RETRY_DELAY_SECONDS)
+            continue
+
+        # Sanity-check restored DB and avoid keeping a corrupt/empty payload.
+        if _sqlite_has_user_data(sqlite_path):
+            logger.info("SQLite restored from Mongo snapshot: %s", sqlite_path)
             return
 
-        sqlite_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(sqlite_path, "wb") as f:
-            f.write(bytes(payload))
-    except Exception:
-        # Mongo snapshot restore is best-effort and must never block app start.
-        return
-
-    # Sanity-check restored DB and avoid keeping a corrupt/empty payload.
-    if not _sqlite_has_user_data(sqlite_path):
         try:
             sqlite_path.unlink(missing_ok=True)
         except Exception:
             pass
+
+    logger.warning("No valid Mongo snapshot restore was applied for SQLite path: %s", sqlite_path)
 
 
 def _backup_sqlite_to_mongo(sqlite_path: Path) -> None:
@@ -187,7 +264,7 @@ def _backup_sqlite_to_mongo(sqlite_path: Path) -> None:
         return
 
     try:
-        payload = sqlite_path.read_bytes()
+        payload = _sqlite_snapshot_bytes(sqlite_path)
         payload_hash = hashlib.sha256(payload).hexdigest()
         size_bytes = len(payload)
         now_dt = datetime.now(timezone.utc)
@@ -234,6 +311,7 @@ def _backup_sqlite_to_mongo(sqlite_path: Path) -> None:
         _last_backup_monotonic = now
     except Exception:
         # Best-effort backup; do not fail request lifecycle.
+        logger.exception("Failed to back up SQLite snapshot to Mongo")
         return
 
 
@@ -316,8 +394,66 @@ def _resolve_database_url(raw_url: str) -> str:
     return f"sqlite:///{db_path.as_posix()}"
 
 
+def _is_render_runtime() -> bool:
+    return (
+        os.getenv("RENDER", "").strip().lower() == "true"
+        or bool(os.getenv("RENDER_SERVICE_ID", "").strip())
+    )
+
+
+def _enforce_durable_storage_requirements() -> None:
+    # Postgres or other external DB is already durable by design.
+    if not DATABASE_URL.startswith("sqlite:///"):
+        return
+
+    if not _is_render_runtime():
+        return
+
+    mongo_ok = bool(_mongo_uri())
+    sqlite_path = _sqlite_path_from_url(DATABASE_URL)
+    sqlite_in_repo = (
+        sqlite_path is not None
+        and sqlite_path.resolve().as_posix().startswith(_BASE_DIR.resolve().as_posix())
+    )
+
+    # On Render, repository filesystem is ephemeral.
+    if sqlite_in_repo and not mongo_ok:
+        raise RuntimeError(
+            "Unsafe persistence config: SQLite is on ephemeral Render filesystem and Mongo backup is not configured. "
+            "Set MONGODB_URI (or MONGODB_URL/MONGO_URI/MONGO_URL) or mount persistent disk and set SQLITE_DB_PATH/DATA_DIR."
+        )
+
+
+def get_persistence_status() -> dict:
+    sqlite_path = _sqlite_path_from_url(DATABASE_URL)
+    mongo_uri_present = bool(_mongo_uri())
+    mongo_db = _get_mongo_snapshot_db()
+    snapshot_available = False
+
+    if mongo_db is not None:
+        try:
+            meta = mongo_db[_MONGO_SNAPSHOT_META_COLLECTION].find_one({"_id": _SNAPSHOT_DOC_ID})
+            legacy = mongo_db[_MONGO_SNAPSHOT_COLLECTION].find_one({"_id": _SNAPSHOT_DOC_ID})
+            snapshot_available = bool((meta and meta.get("file_id")) or (legacy and legacy.get("payload")))
+        except Exception:
+            snapshot_available = False
+
+    return {
+        "database_url": DATABASE_URL,
+        "sqlite_path": str(sqlite_path) if sqlite_path is not None else None,
+        "sqlite_exists": bool(sqlite_path and sqlite_path.exists()),
+        "sqlite_has_user_data": bool(sqlite_path and _sqlite_has_user_data(sqlite_path)),
+        "mongo_uri_present": mongo_uri_present,
+        "mongo_connection_ok": mongo_db is not None,
+        "mongo_snapshot_available": snapshot_available,
+        "render_runtime": _is_render_runtime(),
+    }
+
+
 DATABASE_URL = _resolve_database_url(_default_database_url())
 _SQLITE_PATH = _sqlite_path_from_url(DATABASE_URL)
+
+_enforce_durable_storage_requirements()
 
 if _SQLITE_PATH is not None:
     _restore_sqlite_from_mongo_if_needed(_SQLITE_PATH)

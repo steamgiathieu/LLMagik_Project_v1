@@ -4,13 +4,10 @@ import time
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
-from database import get_db
-from auth import get_current_user
-import models
-import models_rewrite
-import models_text
+from auth import AuthUser, get_current_user
+from mongo import get_mongo_db_dependency, next_sequence, utcnow
 import schemas_rewrite
 from services.ai_service import get_provider
 
@@ -25,17 +22,17 @@ def _resolve_ui_language(x_ui_language: str | None) -> str:
     return code if code in SUPPORTED_UI_LANGUAGES else "vi"
 
 
-def _to_response(r: models_rewrite.RewriteRecord) -> schemas_rewrite.RewriteResponse:
+def _to_response(r: dict) -> schemas_rewrite.RewriteResponse:
     return schemas_rewrite.RewriteResponse(
-        rewrite_id=r.id,
-        paragraph_id=r.paragraph_id,
-        goal=r.goal,
-        original_text=r.original_text,
-        rewritten_text=r.rewritten_text,
-        explanation=r.explanation or "",
-        ai_provider=r.ai_provider,
-        processing_ms=r.processing_ms,
-        created_at=r.created_at,
+        rewrite_id=int(r["rewrite_id"]),
+        paragraph_id=str(r["paragraph_id"]),
+        goal=str(r["goal"]),
+        original_text=str(r["original_text"]),
+        rewritten_text=str(r["rewritten_text"]),
+        explanation=str(r.get("explanation") or ""),
+        ai_provider=r.get("ai_provider"),
+        processing_ms=r.get("processing_ms"),
+        created_at=r.get("created_at", utcnow()),
     )
 
 
@@ -181,7 +178,6 @@ def _language_guardrail_explanation(language: str) -> str:
     return ""
 
 
-# ── POST /rewrite ──────────────────────────────────────────────
 @router.post(
     "/",
     response_model=schemas_rewrite.RewriteResponse,
@@ -190,8 +186,8 @@ def _language_guardrail_explanation(language: str) -> str:
 )
 async def rewrite_paragraph(
     payload: schemas_rewrite.RewriteRequest,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
     x_ui_language: str | None = Header(default=None, alias="X-UI-Language"),
 ):
     payload_original_text = (payload.original_text or "").strip()
@@ -199,35 +195,27 @@ async def rewrite_paragraph(
     document_id = payload.document_id
 
     if payload.document_id:
-        doc = (
-            db.query(models_text.Document)
-            .filter(
-                models_text.Document.id == payload.document_id,
-                models_text.Document.user_id == current_user.id,
-            )
-            .first()
+        doc = db["documents"].find_one(
+            {"document_id": payload.document_id, "user_id": current_user.id},
+            {"_id": 0},
         )
         if not doc:
             raise HTTPException(status_code=404, detail="Tài liệu không tồn tại")
 
-        paragraph = (
-            db.query(models_text.Paragraph)
-            .filter(
-                models_text.Paragraph.document_id == payload.document_id,
-                models_text.Paragraph.paragraph_id == payload.paragraph_id,
-            )
-            .first()
+        paragraph = db["paragraphs"].find_one(
+            {"document_id": payload.document_id, "paragraph_id": payload.paragraph_id},
+            {"_id": 0},
         )
         if paragraph:
-            original_text = paragraph.text
+            original_text = paragraph.get("text")
         elif payload_original_text:
             original_text = payload_original_text
-        elif doc.raw_text and doc.raw_text.strip():
-            original_text = doc.raw_text.strip()
+        elif doc.get("raw_text") and str(doc.get("raw_text")).strip():
+            original_text = str(doc.get("raw_text")).strip()
         else:
             raise HTTPException(status_code=404, detail="Đoạn văn không tồn tại trong tài liệu")
 
-        document_id = doc.id
+        document_id = str(doc.get("document_id"))
 
     if not original_text or len(original_text.strip()) < 10:
         raise HTTPException(status_code=400, detail="Nội dung đoạn văn quá ngắn để viết lại")
@@ -248,15 +236,11 @@ async def rewrite_paragraph(
         raise HTTPException(status_code=502, detail=f"AI service lỗi: {e}")
     elapsed_ms = int((time.monotonic() - t0) * 1000)
 
-    # Validate AI output has required fields
     rewritten_text = (ai_result.get("rewritten_text", "") or "").strip()
     explanation = (ai_result.get("explanation", "") or "").strip()
 
     if not rewritten_text:
-        raise HTTPException(
-            status_code=502,
-            detail="AI không trả về nội dung viết lại hợp lệ",
-        )
+        raise HTTPException(status_code=502, detail="AI không trả về nội dung viết lại hợp lệ")
 
     if _normalize_text_for_compare(rewritten_text) == _normalize_text_for_compare(original_text):
         rewritten_text = _force_minimal_rewrite(original_text, goal=payload.goal, language=effective_language)
@@ -273,24 +257,23 @@ async def rewrite_paragraph(
     elif explanation and _is_language_mismatch(explanation, effective_language):
         explanation = _language_guardrail_explanation(effective_language)
 
-    record = models_rewrite.RewriteRecord(
-        user_id=current_user.id,
-        document_id=document_id,
-        paragraph_id=payload.paragraph_id,
-        goal=payload.goal,
-        original_text=original_text,
-        rewritten_text=rewritten_text,
-        explanation=explanation,
-        ai_provider=os.getenv("AI_PROVIDER", "mock"),
-        processing_ms=elapsed_ms,
-    )
-    db.add(record)
-    db.commit()
-    db.refresh(record)
+    record = {
+        "rewrite_id": next_sequence("rewrite_id"),
+        "user_id": current_user.id,
+        "document_id": document_id,
+        "paragraph_id": payload.paragraph_id,
+        "goal": payload.goal,
+        "original_text": original_text,
+        "rewritten_text": rewritten_text,
+        "explanation": explanation,
+        "ai_provider": os.getenv("AI_PROVIDER", "mock"),
+        "processing_ms": elapsed_ms,
+        "created_at": utcnow(),
+    }
+    db["rewrites"].insert_one(record)
     return _to_response(record)
 
 
-# ── GET /rewrite/presets ───────────────────────────────────────
 @router.get(
     "/presets",
     response_model=List[str],
@@ -300,7 +283,6 @@ def get_presets():
     return schemas_rewrite.PRESET_GOALS
 
 
-# ── GET /rewrite/history ───────────────────────────────────────
 @router.get(
     "/history",
     response_model=List[schemas_rewrite.RewriteHistoryItem],
@@ -309,31 +291,29 @@ def get_presets():
 def get_history(
     limit: int = 20,
     offset: int = 0,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    records = (
-        db.query(models_rewrite.RewriteRecord)
-        .filter(models_rewrite.RewriteRecord.user_id == current_user.id)
-        .order_by(models_rewrite.RewriteRecord.created_at.desc())
-        .offset(offset)
+    records = list(
+        db["rewrites"]
+        .find({"user_id": current_user.id}, {"_id": 0})
+        .sort("created_at", -1)
+        .skip(offset)
         .limit(limit)
-        .all()
     )
     return [
         schemas_rewrite.RewriteHistoryItem(
-            rewrite_id=r.id,
-            paragraph_id=r.paragraph_id,
-            goal=r.goal,
-            ai_provider=r.ai_provider,
-            processing_ms=r.processing_ms,
-            created_at=r.created_at,
+            rewrite_id=int(r["rewrite_id"]),
+            paragraph_id=str(r["paragraph_id"]),
+            goal=str(r["goal"]),
+            ai_provider=r.get("ai_provider"),
+            processing_ms=r.get("processing_ms"),
+            created_at=r.get("created_at", utcnow()),
         )
         for r in records
     ]
 
 
-# ── GET /rewrite/{rewrite_id} ──────────────────────────────────
 @router.get(
     "/{rewrite_id}",
     response_model=schemas_rewrite.RewriteResponse,
@@ -341,17 +321,10 @@ def get_history(
 )
 def get_rewrite(
     rewrite_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    record = (
-        db.query(models_rewrite.RewriteRecord)
-        .filter(
-            models_rewrite.RewriteRecord.id == rewrite_id,
-            models_rewrite.RewriteRecord.user_id == current_user.id,
-        )
-        .first()
-    )
+    record = db["rewrites"].find_one({"rewrite_id": rewrite_id, "user_id": current_user.id}, {"_id": 0})
     if not record:
         raise HTTPException(status_code=404, detail="Không tìm thấy kết quả viết lại")
     return _to_response(record)

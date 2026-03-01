@@ -1,31 +1,21 @@
 import json
 import os
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from database import engine
-import models
-import models_text
-import models_analysis
-import models_rewrite
-import models_chat
-from routers.auth_router import router as auth_router
-from routers.texts_router import router as texts_router
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from mongo import close_mongo, get_persistence_status, init_mongo
 from routers.analysis_router import router as analysis_router
-from routers.rewrite_router import router as rewrite_router
+from routers.auth_router import router as auth_router
 from routers.chat_router import router as chat_router
 from routers.history_router import router as history_router
-from mongo import init_mongo, close_mongo
+from routers.rewrite_router import router as rewrite_router
+from routers.texts_router import router as texts_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    models.Base.metadata.create_all(bind=engine)
-    models_text.Base.metadata.create_all(bind=engine)
-    models_analysis.Base.metadata.create_all(bind=engine)
-    models_rewrite.Base.metadata.create_all(bind=engine)
-    models_chat.Base.metadata.create_all(bind=engine)
     init_mongo()
     yield
     close_mongo()
@@ -33,8 +23,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="InfoLens AI API",
-    description="Backend cho ứng dụng đọc và phân tích văn bản AI",
-    version="1.0.0",
+    description="Backend cho ứng dụng đọc và phân tích văn bản AI (MongoDB)",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -51,7 +41,6 @@ def _load_cors_origins() -> list[str]:
         except Exception:
             pass
 
-    # Fallback single-origin envs often used in hosting dashboards.
     single_origin_candidates = [
         os.getenv("FRONTEND_URL", "").strip(),
         os.getenv("APP_URL", "").strip(),
@@ -81,7 +70,7 @@ app.add_middleware(
         r"https://[\w.-]+\.netlify\.app$|"
         r"https://[\w.-]+\.onrender\.com$"
     ),
-    allow_credentials=True,  # Enable credentials (cookies)
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -102,3 +91,10 @@ def root():
 @app.get("/health", tags=["Health"])
 def health():
     return {"status": "healthy"}
+
+
+@app.get("/health/persistence", tags=["Health"])
+def health_persistence():
+    status = get_persistence_status()
+    status["status"] = "ok"
+    return status

@@ -1,35 +1,27 @@
 """
 routers/auth_router.py
 
-Authentication endpoints:
-  - POST /auth/register — Đăng ký người dùng mới
-  - POST /auth/login    — Đăng nhập & nhận JWT token
-  - GET /auth/me        — Lấy thông tin user hiện tại
-  - PUT /auth/profile   — Cập nhật profile của user
+MongoDB-only authentication endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Response
-from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
-from typing import Optional
 from datetime import timedelta
+from typing import Optional
 import os
 
-from database import get_db
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import BaseModel, Field
+from pymongo.database import Database
+
 from auth import (
-    hash_password,
-    verify_password,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    AuthUser,
     create_access_token,
     get_current_user,
-    ACCESS_TOKEN_EXPIRE_MINUTES,
+    hash_password,
+    verify_password,
 )
-import models
+from mongo import ensure_default_profile, get_mongo_db_dependency, next_sequence, utcnow
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-
-
-# ─────────────────────────────────────────────────────────────
-# Schemas
-# ─────────────────────────────────────────────────────────────
 
 SUPPORTED_ROLES = {"reader", "writer", "both"}
 SUPPORTED_AGE_GROUPS = {"teen", "adult", "senior"}
@@ -48,8 +40,8 @@ def _normalize_age_group(value: Optional[str], default: str = "adult") -> str:
     age_group = value.strip().lower()
     return age_group if age_group in SUPPORTED_AGE_GROUPS else default
 
+
 class RegisterRequest(BaseModel):
-    """Yêu cầu đăng ký."""
     username: str = Field(..., min_length=3, max_length=50, examples=["john_doe"])
     email: Optional[str] = Field(None, examples=["john@example.com"])
     password: str = Field(..., min_length=6, examples=["securepass123"])
@@ -58,36 +50,19 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """Yêu cầu đăng nhập."""
     username: str = Field(..., examples=["john_doe"])
     password: str = Field(..., examples=["securepass123"])
 
 
 class UserResponse(BaseModel):
-    """Thông tin user."""
     id: int
     username: str
     email: str
     nickname: str
     created_at: str
 
-    class Config:
-        from_attributes = True
-
-    @classmethod
-    def from_orm(cls, obj):
-        data = {
-            "id": obj.id,
-            "username": obj.username,
-            "email": obj.email,
-            "nickname": obj.nickname,
-            "created_at": obj.created_at.isoformat() if hasattr(obj.created_at, 'isoformat') else str(obj.created_at),
-        }
-        return cls(**data)
-
 
 class TokenResponse(BaseModel):
-    """Phản hồi token."""
     access_token: str
     token_type: str = "bearer"
     expires_in: int
@@ -95,7 +70,6 @@ class TokenResponse(BaseModel):
 
 
 class UserProfileResponse(BaseModel):
-    """Thông tin profile user."""
     id: int
     username: str
     email: str
@@ -105,33 +79,45 @@ class UserProfileResponse(BaseModel):
     age_group: str
     created_at: str
 
-    class Config:
-        from_attributes = True
-
 
 class UserWithProfileResponse(BaseModel):
-    """User đầy đủ thông tin với profile."""
     id: int
     username: str
     email: str
     nickname: str
     created_at: str
-    profile: UserProfileResponse  # Nested profile
-    
-    class Config:
-        from_attributes = True
+    profile: UserProfileResponse
 
 
 class UpdateProfileRequest(BaseModel):
-    """Cập nhật profile."""
     nickname: Optional[str] = Field(None, min_length=1, max_length=100)
     role: Optional[str] = Field(None)
     age_group: Optional[str] = Field(None)
 
 
-# ─────────────────────────────────────────────────────────────
-# Endpoints
-# ─────────────────────────────────────────────────────────────
+def _user_to_response(user_doc: dict) -> UserResponse:
+    created_at = user_doc.get("created_at")
+    created_text = created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at)
+    return UserResponse(
+        id=int(user_doc["user_id"]),
+        username=str(user_doc["username"]),
+        email=str(user_doc["email"]),
+        nickname=str(user_doc["nickname"]),
+        created_at=created_text,
+    )
+
+
+def _set_auth_cookie(response: Response, access_token: str) -> None:
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        secure=os.getenv("ENVIRONMENT", "development") == "production",
+        samesite="lax",
+        path="/",
+    )
+
 
 @router.post(
     "/register",
@@ -142,74 +128,50 @@ class UpdateProfileRequest(BaseModel):
 def register(
     payload: RegisterRequest,
     response: Response,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_mongo_db_dependency),
 ):
-    """
-    Đăng ký người dùng mới.
-    
-    Kiểm tra username trùng; email là tùy chọn.
-    Nếu không, tạo user mới và trả về JWT token trong cookie.
-    """
-    # Check if username already exists
-    existing_username = db.query(models.User).filter(
-        models.User.username == payload.username
-    ).first()
-    if existing_username:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tên người dùng đã tồn tại",
-        )
+    username = payload.username.strip()
+    if db["users"].find_one({"username": username}):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tên người dùng đã tồn tại")
 
-    email = (payload.email or "").strip().lower() or f"{payload.username}@llmagik.local"
-    existing_email = db.query(models.User).filter(models.User.email == email).first()
-    if existing_email:
+    email = (payload.email or "").strip().lower() or f"{username}@llmagik.local"
+    if db["users"].find_one({"email": email}):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email đã được sử dụng")
 
-    # Create new user
-    user = models.User(
-        username=payload.username,
-        email=email,
-        nickname=payload.nickname,
-        hashed_password=hash_password(payload.password),
+    now = utcnow()
+    user_id = next_sequence("user_id")
+    user_doc = {
+        "user_id": user_id,
+        "username": username,
+        "email": email,
+        "nickname": payload.nickname.strip(),
+        "hashed_password": hash_password(payload.password),
+        "created_at": now,
+        "updated_at": now,
+    }
+    db["users"].insert_one(user_doc)
+
+    db["user_profiles"].insert_one(
+        {
+            "user_id": user_id,
+            "language": "vi",
+            "role": "reader",
+            "age_group": _normalize_age_group(payload.age_group),
+            "created_at": now,
+            "updated_at": now,
+        }
     )
-    db.add(user)
-    db.flush()
 
-    age_group = _normalize_age_group(payload.age_group)
-
-    # Create user profile
-    profile = models.UserProfile(
-        user_id=user.id,
-        language="vi",
-        role="reader",
-        age_group=age_group,
-    )
-    db.add(profile)
-    db.commit()
-    db.refresh(user)
-
-    # Create access token
     access_token = create_access_token(
-        data={"sub": user.username},
+        data={"sub": username},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-
-    # Set HTTP-only secure cookie
-    if response:
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
-            httponly=True,
-            secure=os.getenv("ENVIRONMENT", "development") == "production",  # Only HTTPS in production
-            samesite="lax",
-            path="/",
-        )
+    _set_auth_cookie(response, access_token)
 
     return TokenResponse(
         access_token=access_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user=UserResponse.from_orm(user),
+        user=_user_to_response(user_doc),
     )
 
 
@@ -221,44 +183,25 @@ def register(
 def login(
     payload: LoginRequest,
     response: Response,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_mongo_db_dependency),
 ):
-    """
-    Đăng nhập với username và password.
-    
-    Trả về JWT access_token trong cookie nếu thành công.
-    """
-    user = db.query(models.User).filter(
-        models.User.username == payload.username
-    ).first()
-
-    if not user or not verify_password(payload.password, user.hashed_password):
+    user_doc = db["users"].find_one({"username": payload.username.strip()})
+    if not user_doc or not verify_password(payload.password, str(user_doc.get("hashed_password", ""))):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Tên người dùng hoặc mật khẩu không đúng",
         )
 
     access_token = create_access_token(
-        data={"sub": user.username},
+        data={"sub": str(user_doc["username"])},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-
-    # Set HTTP-only secure cookie
-    if response:
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
-            httponly=True,
-            secure=os.getenv("ENVIRONMENT", "development") == "production",  # Only HTTPS in production
-            samesite="lax",
-            path="/",
-        )
+    _set_auth_cookie(response, access_token)
 
     return TokenResponse(
         access_token=access_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user=UserResponse.from_orm(user),
+        user=_user_to_response(user_doc),
     )
 
 
@@ -269,34 +212,24 @@ def login(
 )
 def refresh_token(
     response: Response,
-    current_user: models.User = Depends(get_current_user),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    """
-    Gia hạn JWT token bằng cách tạo token mới.
-    
-    Yêu cầu xác thực (JWT token hiện tại).
-    """
     access_token = create_access_token(
         data={"sub": current_user.username},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-
-    # Update HTTP-only secure cookie
-    if response:
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
-            httponly=True,
-            secure=os.getenv("ENVIRONMENT", "development") == "production",
-            samesite="lax",
-            path="/",
-        )
+    _set_auth_cookie(response, access_token)
 
     return TokenResponse(
         access_token=access_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user=UserResponse.from_orm(current_user),
+        user=UserResponse(
+            id=current_user.id,
+            username=current_user.username,
+            email=current_user.email,
+            nickname=current_user.nickname,
+            created_at=current_user.created_at.isoformat(),
+        ),
     )
 
 
@@ -306,47 +239,30 @@ def refresh_token(
     summary="Lấy thông tin user hiện tại",
 )
 def get_me(
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: AuthUser = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
 ):
-    """
-    Lấy thông tin profile của user hiện tại.
-    
-    Yêu cầu xác thực (JWT token).
-    """
-    profile = db.query(models.UserProfile).filter(
-        models.UserProfile.user_id == current_user.id
-    ).first()
-
+    profile = db["user_profiles"].find_one({"user_id": current_user.id})
     if not profile:
-        # Create default profile if not exists
-        profile = models.UserProfile(
-            user_id=current_user.id,
-            language="vi",
-            role="reader",
-            age_group="adult",
-        )
-        db.add(profile)
-        db.commit()
+        profile = ensure_default_profile(current_user.id)
 
-    # Build nested response with profile field
     profile_data = UserProfileResponse(
-        id=profile.user_id,
+        id=current_user.id,
         username=current_user.username,
         email=current_user.email,
         nickname=current_user.nickname,
-        language=profile.language,
-        role=profile.role,
-        age_group=profile.age_group,
-        created_at=current_user.created_at.isoformat() if hasattr(current_user.created_at, 'isoformat') else str(current_user.created_at),
+        language=str(profile.get("language", "vi")),
+        role=str(profile.get("role", "reader")),
+        age_group=str(profile.get("age_group", "adult")),
+        created_at=current_user.created_at.isoformat(),
     )
-    
+
     return UserWithProfileResponse(
         id=current_user.id,
         username=current_user.username,
         email=current_user.email,
         nickname=current_user.nickname,
-        created_at=current_user.created_at.isoformat() if hasattr(current_user.created_at, 'isoformat') else str(current_user.created_at),
+        created_at=current_user.created_at.isoformat(),
         profile=profile_data,
     )
 
@@ -358,44 +274,46 @@ def get_me(
 )
 def update_profile(
     payload: UpdateProfileRequest,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: AuthUser = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
 ):
-    """
-    Cập nhật profile của user.
-    
-    Các trường có thể cập nhật: nickname, role, age_group.
-    """
-    profile = db.query(models.UserProfile).filter(
-        models.UserProfile.user_id == current_user.id
-    ).first()
-
-    if not profile:
-        profile = models.UserProfile(user_id=current_user.id)
-        db.add(profile)
-
-    # Update profile fields if provided
     if payload.nickname is not None:
+        db["users"].update_one(
+            {"user_id": current_user.id},
+            {"$set": {"nickname": payload.nickname, "updated_at": utcnow()}},
+        )
         current_user.nickname = payload.nickname
 
+    set_doc = {"updated_at": utcnow()}
     if payload.role is not None:
-        profile.role = _normalize_role(payload.role, profile.role or "reader")
-
+        set_doc["role"] = _normalize_role(payload.role)
     if payload.age_group is not None:
-        profile.age_group = _normalize_age_group(payload.age_group, profile.age_group or "adult")
+        set_doc["age_group"] = _normalize_age_group(payload.age_group)
 
-    db.commit()
-    db.refresh(current_user)
-    db.refresh(profile)
+    db["user_profiles"].update_one(
+        {"user_id": current_user.id},
+        {
+            "$set": set_doc,
+            "$setOnInsert": {
+                "language": "vi",
+                "role": "reader",
+                "age_group": "adult",
+                "created_at": utcnow(),
+            },
+        },
+        upsert=True,
+    )
+
+    profile = db["user_profiles"].find_one({"user_id": current_user.id}) or {}
 
     return UserProfileResponse(
         id=current_user.id,
         username=current_user.username,
         email=current_user.email,
         nickname=current_user.nickname,
-        language=profile.language,
-        role=profile.role,
-        age_group=profile.age_group,
+        language=str(profile.get("language", "vi")),
+        role=str(profile.get("role", "reader")),
+        age_group=str(profile.get("age_group", "adult")),
         created_at=current_user.created_at.isoformat(),
     )
 
@@ -406,13 +324,5 @@ def update_profile(
     summary="Đăng xuất",
 )
 def logout(response: Response):
-    """
-    Đăng xuất người dùng bằng cách xóa cookie.
-    """
-    if response:
-        response.delete_cookie(
-            key="access_token",
-            path="/",
-        )
-    
+    response.delete_cookie(key="access_token", path="/")
     return {"message": "Đã đăng xuất thành công"}

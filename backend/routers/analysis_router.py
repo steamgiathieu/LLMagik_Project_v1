@@ -3,16 +3,12 @@ import time
 from typing import List
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
-from database import get_db
-from auth import get_current_user
-import models
-import models_text
-import models_analysis
+from auth import AuthUser, get_current_user
+from mongo import get_mongo_db_dependency, next_sequence, utcnow
 import schemas_analysis
 from services.ai_service import get_provider
-from mongo import save_analysis_snapshot, mongo_enabled
 
 router = APIRouter(prefix="/analysis", tags=["Analysis"])
 SUPPORTED_UI_LANGUAGES = {"vi", "en", "zh", "ja", "fr"}
@@ -25,9 +21,8 @@ def _resolve_ui_language(x_ui_language: str | None) -> str:
     return code if code in SUPPORTED_UI_LANGUAGES else "vi"
 
 
-def _build_response(record: models_analysis.AnalysisResult) -> schemas_analysis.AnalyzeResponse:
-    """Chuyển AnalysisResult ORM → AnalyzeResponse Pydantic."""
-    result: dict = record.result or {}
+def _build_response(record: dict) -> schemas_analysis.AnalyzeResponse:
+    result: dict = record.get("result") or {}
 
     def _model_or_none(cls, data):
         if not data:
@@ -49,48 +44,31 @@ def _build_response(record: models_analysis.AnalysisResult) -> schemas_analysis.
         return out or None
 
     return schemas_analysis.AnalyzeResponse(
-        analysis_id=record.id,
-        document_id=record.document_id,
-        mode=record.mode,
-        ai_provider=record.ai_provider,
-        processing_ms=record.processing_ms,
-        created_at=record.created_at,
-        # core
+        analysis_id=int(record["analysis_id"]),
+        document_id=str(record["document_id"]),
+        mode=str(record["mode"]),
+        ai_provider=record.get("ai_provider"),
+        processing_ms=record.get("processing_ms"),
+        created_at=record.get("created_at", utcnow()),
         summary=result.get("summary"),
         tone_analysis=_model_or_none(schemas_analysis.ToneAnalysis, result.get("tone_analysis")),
         paragraph_analyses=_list_model(schemas_analysis.ParagraphAnalysis, result.get("paragraph_analyses")),
-        # reader
         key_takeaways=result.get("key_takeaways"),
         reading_difficulty=result.get("reading_difficulty"),
-        readability_metrics=_model_or_none(
-            schemas_analysis.ReadabilityMetrics, result.get("readability_metrics")
-        ),
-        claim_checks=_list_model(
-            schemas_analysis.ClaimCheckItem, result.get("claim_checks")
-        ),
-        critical_reading_guard=_model_or_none(
-            schemas_analysis.CriticalReadingGuard, result.get("critical_reading_guard")
-        ),
+        readability_metrics=_model_or_none(schemas_analysis.ReadabilityMetrics, result.get("readability_metrics")),
+        claim_checks=_list_model(schemas_analysis.ClaimCheckItem, result.get("claim_checks")),
+        critical_reading_guard=_model_or_none(schemas_analysis.CriticalReadingGuard, result.get("critical_reading_guard")),
         logic_issues=_list_model(schemas_analysis.LogicIssue, result.get("logic_issues")),
-        reader_summary_breakdown=_model_or_none(
-            schemas_analysis.ReaderSummaryBreakdown, result.get("reader_summary_breakdown")
-        ),
-        deep_style_analysis=_model_or_none(
-            schemas_analysis.DeepStyleAnalysis, result.get("deep_style_analysis")
-        ),
-        logic_diagnostics=_list_model(
-            schemas_analysis.LogicDiagnostic, result.get("logic_diagnostics")
-        ),
-        # writer
+        reader_summary_breakdown=_model_or_none(schemas_analysis.ReaderSummaryBreakdown, result.get("reader_summary_breakdown")),
+        deep_style_analysis=_model_or_none(schemas_analysis.DeepStyleAnalysis, result.get("deep_style_analysis")),
+        logic_diagnostics=_list_model(schemas_analysis.LogicDiagnostic, result.get("logic_diagnostics")),
         style_issues=_list_model(schemas_analysis.StyleIssue, result.get("style_issues")),
         rewrite_suggestions=_list_model(schemas_analysis.RewriteSuggestion, result.get("rewrite_suggestions")),
         overall_score=_model_or_none(schemas_analysis.OverallScore, result.get("overall_score")),
-        # raw fallback
         raw_result=result if "error" in result else None,
     )
 
 
-# ── POST /analysis/analyze ─────────────────────────────────────
 @router.post(
     "/analyze",
     response_model=schemas_analysis.AnalyzeResponse,
@@ -99,28 +77,20 @@ def _build_response(record: models_analysis.AnalysisResult) -> schemas_analysis.
 )
 async def analyze_document(
     payload: schemas_analysis.AnalyzeRequest,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
     x_ui_language: str | None = Header(default=None, alias="X-UI-Language"),
 ):
-    # Verify document belongs to user
-    doc = (
-        db.query(models_text.Document)
-        .filter(
-            models_text.Document.id == payload.document_id,
-            models_text.Document.user_id == current_user.id,
-        )
-        .first()
+    doc = db["documents"].find_one(
+        {"document_id": payload.document_id, "user_id": current_user.id},
+        {"_id": 0},
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Tài liệu không tồn tại")
 
-    # Convert paragraphs to plain dicts for AI service
     paragraphs = [{"id": p.id, "text": p.text} for p in payload.paragraphs]
-
     request_language = _resolve_ui_language(x_ui_language)
 
-    # Call AI
     provider = get_provider()
     t0 = time.monotonic()
     try:
@@ -129,82 +99,60 @@ async def analyze_document(
         raise HTTPException(status_code=502, detail=f"AI service lỗi: {e}")
     elapsed_ms = int((time.monotonic() - t0) * 1000)
 
-    # Build short summary for history display
     summary_text = ai_result.get("summary", "")
     if not summary_text:
         pa = ai_result.get("paragraph_analyses", [])
         summary_text = pa[0].get("main_idea", "") if pa else ""
     result_summary = summary_text[:300] if summary_text else None
 
-    # Persist
-    record = models_analysis.AnalysisResult(
-        document_id=payload.document_id,
-        user_id=current_user.id,
-        mode=payload.mode,
-        ai_provider=os.getenv("AI_PROVIDER", "mock"),
-        result=ai_result,
-        result_summary=result_summary,
-        processing_ms=elapsed_ms,
-    )
-    db.add(record)
-    db.commit()
-    db.refresh(record)
-
-    if mongo_enabled():
-        try:
-            await save_analysis_snapshot({
-                "analysis_id": record.id,
-                "document_id": record.document_id,
-                "user_id": record.user_id,
-                "mode": record.mode,
-                "ai_provider": record.ai_provider,
-                "processing_ms": record.processing_ms,
-                "created_at": record.created_at.isoformat() if record.created_at else None,
-                "result_summary": record.result_summary,
-                "result": ai_result,
-            })
-        except Exception:
-            # Mongo is optional; do not fail API response if snapshot persistence fails.
-            pass
-
+    record = {
+        "analysis_id": next_sequence("analysis_id"),
+        "document_id": payload.document_id,
+        "user_id": current_user.id,
+        "mode": payload.mode,
+        "ai_provider": os.getenv("AI_PROVIDER", "mock"),
+        "result": ai_result,
+        "result_summary": result_summary,
+        "processing_ms": elapsed_ms,
+        "created_at": utcnow(),
+    }
+    db["analyses"].insert_one(record)
     return _build_response(record)
 
 
-# ── GET /analysis/history ──────────────────────────────────────
 @router.get(
     "/history",
     response_model=List[schemas_analysis.AnalysisHistoryItem],
     summary="Lịch sử phân tích của người dùng",
 )
 def get_history(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
     limit: int = 20,
     offset: int = 0,
 ):
-    records = (
-        db.query(models_analysis.AnalysisResult)
-        .filter(models_analysis.AnalysisResult.user_id == current_user.id)
-        .order_by(models_analysis.AnalysisResult.created_at.desc())
-        .offset(offset)
+    cursor = (
+        db["analyses"]
+        .find({"user_id": current_user.id}, {"_id": 0})
+        .sort("created_at", -1)
+        .skip(offset)
         .limit(limit)
-        .all()
     )
+    records = list(cursor)
     return [
         schemas_analysis.AnalysisHistoryItem(
-            analysis_id=r.id,
-            document_id=r.document_id,
-            mode=r.mode,
-            ai_provider=r.ai_provider,
-            result_summary=r.result_summary,
-            processing_ms=r.processing_ms,
-            created_at=r.created_at,
+            analysis_id=int(r["analysis_id"]),
+            document_id=str(r["document_id"]),
+            mode=str(r["mode"]),
+            ai_provider=r.get("ai_provider"),
+            result_summary=r.get("result_summary"),
+            processing_ms=r.get("processing_ms"),
+            created_at=r.get("created_at", utcnow()),
         )
         for r in records
     ]
 
 
-# ── GET /analysis/history/{document_id} ───────────────────────
 @router.get(
     "/history/{document_id}",
     response_model=List[schemas_analysis.AnalysisHistoryItem],
@@ -212,33 +160,28 @@ def get_history(
 )
 def get_document_history(
     document_id: str,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    records = (
-        db.query(models_analysis.AnalysisResult)
-        .filter(
-            models_analysis.AnalysisResult.document_id == document_id,
-            models_analysis.AnalysisResult.user_id == current_user.id,
-        )
-        .order_by(models_analysis.AnalysisResult.created_at.desc())
-        .all()
+    records = list(
+        db["analyses"]
+        .find({"document_id": document_id, "user_id": current_user.id}, {"_id": 0})
+        .sort("created_at", -1)
     )
     return [
         schemas_analysis.AnalysisHistoryItem(
-            analysis_id=r.id,
-            document_id=r.document_id,
-            mode=r.mode,
-            ai_provider=r.ai_provider,
-            result_summary=r.result_summary,
-            processing_ms=r.processing_ms,
-            created_at=r.created_at,
+            analysis_id=int(r["analysis_id"]),
+            document_id=str(r["document_id"]),
+            mode=str(r["mode"]),
+            ai_provider=r.get("ai_provider"),
+            result_summary=r.get("result_summary"),
+            processing_ms=r.get("processing_ms"),
+            created_at=r.get("created_at", utcnow()),
         )
         for r in records
     ]
 
 
-# ── GET /analysis/{analysis_id} ────────────────────────────────
 @router.get(
     "/{analysis_id}",
     response_model=schemas_analysis.AnalyzeResponse,
@@ -246,17 +189,10 @@ def get_document_history(
 )
 def get_analysis(
     analysis_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    record = (
-        db.query(models_analysis.AnalysisResult)
-        .filter(
-            models_analysis.AnalysisResult.id == analysis_id,
-            models_analysis.AnalysisResult.user_id == current_user.id,
-        )
-        .first()
-    )
+    record = db["analyses"].find_one({"analysis_id": analysis_id, "user_id": current_user.id}, {"_id": 0})
     if not record:
         raise HTTPException(status_code=404, detail="Không tìm thấy kết quả phân tích")
     return _build_response(record)

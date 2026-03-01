@@ -3,20 +3,17 @@ from typing import List
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
-from database import get_db
-from auth import get_current_user
-import models
-import models_text
-import models_chat
+from auth import AuthUser, get_current_user
+from mongo import get_mongo_db_dependency, next_sequence, utcnow
 import schemas_chat
 from services.ai_service import get_provider
-from services.text_processor import split_paragraphs, build_paragraph_list
+from services.text_processor import build_paragraph_list, split_paragraphs
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
-MAX_PARAGRAPHS_IN_CONTEXT = 30   # tránh context quá dài
+MAX_PARAGRAPHS_IN_CONTEXT = 30
 SUPPORTED_UI_LANGUAGES = {"vi", "en", "zh", "ja", "fr"}
 
 
@@ -28,63 +25,60 @@ def _resolve_ui_language(x_ui_language: str | None) -> str:
 
 
 def _create_inline_document(
-    db: Session,
+    db: Database,
     user_id: int,
     context_text: str,
-) -> models_text.Document:
+) -> dict:
     normalized = (context_text or "").strip()
     if len(normalized) < 10:
-        raise HTTPException(
-            status_code=422,
-            detail="Ngữ liệu tự nhập quá ngắn để chat",
-        )
+        raise HTTPException(status_code=422, detail="Ngữ liệu tự nhập quá ngắn để chat")
 
     para_list = build_paragraph_list(split_paragraphs(normalized))
     if not para_list:
         para_list = [{"id": "P1", "text": normalized}]
 
-    doc = models_text.Document(
-        id=str(uuid4()),
-        user_id=user_id,
-        title="Inline chat context",
-        source_type="text",
-        source_ref="chat:inline",
-        raw_text=normalized,
-        paragraph_count=len(para_list),
+    doc_id = str(uuid4())
+    now = utcnow()
+    doc = {
+        "document_id": doc_id,
+        "user_id": user_id,
+        "title": "Inline chat context",
+        "source_type": "text",
+        "source_ref": "chat:inline",
+        "raw_text": normalized,
+        "paragraph_count": len(para_list),
+        "created_at": now,
+        "updated_at": now,
+    }
+    db["documents"].insert_one(doc)
+    db["paragraphs"].insert_many(
+        [
+            {
+                "document_id": doc_id,
+                "paragraph_id": p["id"],
+                "index": idx,
+                "text": p["text"],
+            }
+            for idx, p in enumerate(para_list)
+        ]
     )
-    db.add(doc)
-    db.flush()
-
-    for idx, p in enumerate(para_list):
-        db.add(
-            models_text.Paragraph(
-                document_id=doc.id,
-                paragraph_id=p["id"],
-                index=idx,
-                text=p["text"],
-            )
-        )
-    db.flush()
-    db.refresh(doc)
     return doc
 
 
 def _get_or_create_session(
-    db: Session,
+    db: Database,
     user_id: int,
     document_id: str,
     session_id: int | None,
-) -> models_chat.ChatSession:
-    """Lấy session có sẵn hoặc tạo mới."""
+) -> dict:
     if session_id is not None:
-        session = (
-            db.query(models_chat.ChatSession)
-            .filter(
-                models_chat.ChatSession.id == session_id,
-                models_chat.ChatSession.user_id == user_id,
-                models_chat.ChatSession.document_id == document_id,
-            )
-            .first()
+        session = db["chat_sessions"].find_one(
+            {
+                "session_id": session_id,
+                "user_id": user_id,
+                "document_id": document_id,
+            },
+            {"_id": 0},
         )
         if not session:
             raise HTTPException(
@@ -93,34 +87,38 @@ def _get_or_create_session(
             )
         return session
 
-    session = models_chat.ChatSession(user_id=user_id, document_id=document_id)
-    db.add(session)
-    db.flush()
+    session = {
+        "session_id": next_sequence("session_id"),
+        "user_id": user_id,
+        "document_id": document_id,
+        "created_at": utcnow(),
+    }
+    db["chat_sessions"].insert_one(session)
     return session
 
 
-def _build_history(session: models_chat.ChatSession) -> list[dict]:
-    """Chuyển messages trong session thành list history cho AI."""
-    return [
-        {"role": msg.role, "content": msg.content}
-        for msg in session.messages
-    ]
+def _build_history(db: Database, session_id: int) -> list[dict]:
+    msgs = list(
+        db["chat_messages"]
+        .find({"session_id": session_id}, {"_id": 0, "role": 1, "content": 1})
+        .sort("message_id", 1)
+    )
+    return [{"role": m.get("role", "user"), "content": m.get("content", "")} for m in msgs]
 
 
-def _msg_to_out(msg: models_chat.ChatMessage) -> schemas_chat.ChatMessageOut:
+def _msg_to_out(msg: dict) -> schemas_chat.ChatMessageOut:
     return schemas_chat.ChatMessageOut(
-        message_id=msg.id,
-        role=msg.role,
-        content=msg.content,
-        referenced_paragraphs=msg.referenced_paragraphs,
-        confidence=msg.confidence,
-        out_of_scope=msg.out_of_scope,
-        processing_ms=msg.processing_ms,
-        created_at=msg.created_at,
+        message_id=int(msg["message_id"]),
+        role=str(msg.get("role", "assistant")),
+        content=str(msg.get("content", "")),
+        referenced_paragraphs=msg.get("referenced_paragraphs"),
+        confidence=msg.get("confidence"),
+        out_of_scope=msg.get("out_of_scope"),
+        processing_ms=msg.get("processing_ms"),
+        created_at=msg.get("created_at", utcnow()),
     )
 
 
-# ── POST /chat ─────────────────────────────────────────────────
 @router.post(
     "/",
     response_model=schemas_chat.ChatResponse,
@@ -129,65 +127,52 @@ def _msg_to_out(msg: models_chat.ChatMessage) -> schemas_chat.ChatMessageOut:
 )
 async def chat(
     payload: schemas_chat.ChatRequest,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
     x_ui_language: str | None = Header(default=None, alias="X-UI-Language"),
 ):
-    # 1. Resolve context from either uploaded document or inline text
     inline_text = (payload.context_text or "").strip()
-    doc = None
 
     if payload.document_id:
-        doc = (
-            db.query(models_text.Document)
-            .filter(
-                models_text.Document.id == payload.document_id,
-                models_text.Document.user_id == current_user.id,
-            )
-            .first()
+        doc = db["documents"].find_one(
+            {"document_id": payload.document_id, "user_id": current_user.id},
+            {"_id": 0},
         )
         if not doc:
             raise HTTPException(status_code=404, detail="Tài liệu không tồn tại")
     elif inline_text:
         doc = _create_inline_document(db, current_user.id, inline_text)
     else:
-        raise HTTPException(
-            status_code=422,
-            detail="Cần cung cấp document_id hoặc context_text để chat",
-        )
+        raise HTTPException(status_code=422, detail="Cần cung cấp document_id hoặc context_text để chat")
 
-    if not doc.paragraphs:
-        raise HTTPException(
-            status_code=422,
-            detail="Tài liệu chưa có đoạn văn nào để trả lời câu hỏi",
-        )
-
-    # 2. Get or create session
-    session = _get_or_create_session(
-        db, current_user.id, doc.id, payload.session_id
+    paragraph_docs = list(
+        db["paragraphs"]
+        .find({"document_id": doc["document_id"]}, {"_id": 0})
+        .sort("index", 1)
     )
+    if not paragraph_docs:
+        raise HTTPException(status_code=422, detail="Tài liệu chưa có đoạn văn nào để trả lời câu hỏi")
 
-    # 3. Build paragraph context (capped)
+    session = _get_or_create_session(db, current_user.id, doc["document_id"], payload.session_id)
+
     paragraphs = [
-        {"id": p.paragraph_id, "text": p.text}
-        for p in doc.paragraphs[:MAX_PARAGRAPHS_IN_CONTEXT]
+        {"id": p["paragraph_id"], "text": p["text"]}
+        for p in paragraph_docs[:MAX_PARAGRAPHS_IN_CONTEXT]
     ]
+    history = _build_history(db, int(session["session_id"]))
 
-    # 4. Build conversation history
-    history = _build_history(session)
-
-    # 5. Save user message
-    user_msg = models_chat.ChatMessage(
-        session_id=session.id,
-        role="user",
-        content=payload.user_question,
+    user_message_id = next_sequence("chat_message_id")
+    db["chat_messages"].insert_one(
+        {
+            "message_id": user_message_id,
+            "session_id": int(session["session_id"]),
+            "role": "user",
+            "content": payload.user_question,
+            "created_at": utcnow(),
+        }
     )
-    db.add(user_msg)
-    db.flush()
 
     request_language = _resolve_ui_language(x_ui_language)
-
-    # 7. Call AI
     provider = get_provider()
     t0 = time.monotonic()
     try:
@@ -198,79 +183,75 @@ async def chat(
             language=request_language,
         )
     except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=502, detail=f"AI service lỗi: {e}")
     elapsed_ms = int((time.monotonic() - t0) * 1000)
 
-    # 7. Parse & validate AI output
     answer = ai_result.get("answer", "")
     ref_paragraphs = ai_result.get("referenced_paragraphs", [])
     confidence = ai_result.get("confidence", "medium")
     out_of_scope = bool(ai_result.get("out_of_scope", False))
 
     if not answer:
-        db.rollback()
         raise HTTPException(status_code=502, detail="AI không trả về câu trả lời hợp lệ")
 
-    # Sanitize: chỉ giữ P-ids hợp lệ thực sự có trong document
-    valid_ids = {p.paragraph_id for p in doc.paragraphs}
+    valid_ids = {str(p["paragraph_id"]) for p in paragraph_docs}
     ref_paragraphs = [pid for pid in ref_paragraphs if pid in valid_ids]
 
-    # 8. Save assistant message
-    assistant_msg = models_chat.ChatMessage(
-        session_id=session.id,
-        role="assistant",
-        content=answer,
-        referenced_paragraphs=ref_paragraphs,
-        confidence=confidence,
-        out_of_scope=out_of_scope,
-        processing_ms=elapsed_ms,
-    )
-    db.add(assistant_msg)
-    db.commit()
-    db.refresh(assistant_msg)
+    assistant_message_id = next_sequence("chat_message_id")
+    assistant_doc = {
+        "message_id": assistant_message_id,
+        "session_id": int(session["session_id"]),
+        "role": "assistant",
+        "content": answer,
+        "referenced_paragraphs": ref_paragraphs,
+        "confidence": confidence,
+        "out_of_scope": out_of_scope,
+        "processing_ms": elapsed_ms,
+        "created_at": utcnow(),
+    }
+    db["chat_messages"].insert_one(assistant_doc)
 
     return schemas_chat.ChatResponse(
-        session_id=session.id,
-        document_id=doc.id,
-        message_id=assistant_msg.id,
+        session_id=int(session["session_id"]),
+        document_id=str(doc["document_id"]),
+        message_id=assistant_message_id,
         answer=answer,
         referenced_paragraphs=ref_paragraphs,
         confidence=confidence,
         out_of_scope=out_of_scope,
         processing_ms=elapsed_ms,
-        created_at=assistant_msg.created_at,
+        created_at=assistant_doc["created_at"],
     )
 
 
-# ── GET /chat/sessions ─────────────────────────────────────────
 @router.get(
     "/sessions",
     response_model=List[schemas_chat.ChatSessionOut],
     summary="Danh sách session chat của người dùng",
 )
 def list_sessions(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    sessions = (
-        db.query(models_chat.ChatSession)
-        .filter(models_chat.ChatSession.user_id == current_user.id)
-        .order_by(models_chat.ChatSession.created_at.desc())
-        .all()
+    sessions = list(
+        db["chat_sessions"]
+        .find({"user_id": current_user.id}, {"_id": 0})
+        .sort("created_at", -1)
     )
-    return [
-        schemas_chat.ChatSessionOut(
-            session_id=s.id,
-            document_id=s.document_id,
-            message_count=len(s.messages),
-            created_at=s.created_at,
+    out: list[schemas_chat.ChatSessionOut] = []
+    for s in sessions:
+        message_count = db["chat_messages"].count_documents({"session_id": int(s["session_id"])})
+        out.append(
+            schemas_chat.ChatSessionOut(
+                session_id=int(s["session_id"]),
+                document_id=str(s["document_id"]),
+                message_count=message_count,
+                created_at=s.get("created_at", utcnow()),
+            )
         )
-        for s in sessions
-    ]
+    return out
 
 
-# ── GET /chat/sessions/{session_id} ───────────────────────────
 @router.get(
     "/sessions/{session_id}",
     response_model=schemas_chat.ChatHistoryResponse,
@@ -278,29 +259,29 @@ def list_sessions(
 )
 def get_session_history(
     session_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    session = (
-        db.query(models_chat.ChatSession)
-        .filter(
-            models_chat.ChatSession.id == session_id,
-            models_chat.ChatSession.user_id == current_user.id,
-        )
-        .first()
+    session = db["chat_sessions"].find_one(
+        {"session_id": session_id, "user_id": current_user.id},
+        {"_id": 0},
     )
     if not session:
         raise HTTPException(status_code=404, detail="Session không tồn tại")
 
+    msgs = list(
+        db["chat_messages"]
+        .find({"session_id": session_id}, {"_id": 0})
+        .sort("message_id", 1)
+    )
     return schemas_chat.ChatHistoryResponse(
-        session_id=session.id,
-        document_id=session.document_id,
-        messages=[_msg_to_out(m) for m in session.messages],
-        created_at=session.created_at,
+        session_id=session_id,
+        document_id=str(session["document_id"]),
+        messages=[_msg_to_out(m) for m in msgs],
+        created_at=session.get("created_at", utcnow()),
     )
 
 
-# ── DELETE /chat/sessions/{session_id} ────────────────────────
 @router.delete(
     "/sessions/{session_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -308,18 +289,15 @@ def get_session_history(
 )
 def delete_session(
     session_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    db: Database = Depends(get_mongo_db_dependency),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    session = (
-        db.query(models_chat.ChatSession)
-        .filter(
-            models_chat.ChatSession.id == session_id,
-            models_chat.ChatSession.user_id == current_user.id,
-        )
-        .first()
+    session = db["chat_sessions"].find_one(
+        {"session_id": session_id, "user_id": current_user.id},
+        {"_id": 1},
     )
     if not session:
         raise HTTPException(status_code=404, detail="Session không tồn tại")
-    db.delete(session)
-    db.commit()
+
+    db["chat_messages"].delete_many({"session_id": session_id})
+    db["chat_sessions"].delete_one({"session_id": session_id, "user_id": current_user.id})
