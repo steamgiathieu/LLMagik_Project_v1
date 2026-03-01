@@ -296,20 +296,6 @@ def init_mongo() -> None:
             if ca_file:
                 client_kwargs["tlsCAFile"] = ca_file
 
-            # Keep TLS options explicit and mutually exclusive.
-            ocsp_disabled = _env_bool(
-                "MONGO_TLS_DISABLE_OCSP_ENDPOINT_CHECK",
-                False,
-            )
-            allow_invalid = _env_bool("MONGO_TLS_ALLOW_INVALID_CERTS", False)
-
-            # Do not enable both simultaneously.
-            if allow_invalid:
-                client_kwargs["tlsAllowInvalidCertificates"] = True
-                client_kwargs["tlsAllowInvalidHostnames"] = True
-            elif ocsp_disabled:
-                client_kwargs["tlsDisableOCSPEndpointCheck"] = True
-
         _mongo_client = MongoClient(uri, **client_kwargs)
         _mongo_client.admin.command("ping")
         _mongo_db = _mongo_client[_db_name_from_uri(uri)]
@@ -324,40 +310,6 @@ def init_mongo() -> None:
         _next_mongo_retry_at_monotonic = time.monotonic() + float(os.getenv("MONGO_RETRY_COOLDOWN_SECONDS", "8"))
         logger.warning("MongoDB disabled due to invalid URI: %s", exc)
     except Exception as exc:
-        # Fallback for environments with problematic TLS trust chain.
-        allow_invalid = _env_bool("MONGO_TLS_ALLOW_INVALID_CERTS", False)
-        try_insecure_fallback = _env_bool("MONGO_TRY_INSECURE_FALLBACK", False)
-        can_retry_insecure = bool(client_kwargs.get("tls")) and not allow_invalid and try_insecure_fallback
-
-        if can_retry_insecure:
-            insecure_kwargs = dict(client_kwargs)
-            # Ensure mutually exclusive TLS knobs in fallback path as well.
-            insecure_kwargs.pop("tlsDisableOCSPEndpointCheck", None)
-            insecure_kwargs["tlsAllowInvalidCertificates"] = True
-            insecure_kwargs["tlsAllowInvalidHostnames"] = True
-            try:
-                retry_client = MongoClient(uri, **insecure_kwargs)
-                retry_client.admin.command("ping")
-                retry_db = retry_client[_db_name_from_uri(uri)]
-                _ensure_indexes(retry_db)
-
-                _mongo_client = retry_client
-                _mongo_db = retry_db
-                _last_mongo_init_error = None
-                _next_mongo_retry_at_monotonic = 0.0
-                logger.warning(
-                    "MongoDB initialized using insecure TLS fallback. "
-                    "Enable only for temporary diagnostics."
-                )
-                return
-            except Exception as retry_exc:
-                _mongo_client = None
-                _mongo_db = None
-                _last_mongo_init_error = f"{exc} | insecure TLS fallback failed: {retry_exc}"
-                _next_mongo_retry_at_monotonic = time.monotonic() + float(os.getenv("MONGO_RETRY_COOLDOWN_SECONDS", "8"))
-                logger.exception("MongoDB init failed (including insecure TLS fallback)")
-                return
-
         _mongo_client = None
         _mongo_db = None
         _last_mongo_init_error = str(exc)
@@ -420,7 +372,6 @@ def get_persistence_status() -> dict[str, Any]:
         "mongo_db_name": db_name,
         "mongo_init_error": _last_mongo_init_error,
         "mongo_retry_after_seconds": round(retry_after, 2),
-        "mongo_tls_disable_ocsp_endpoint_check": _env_bool("MONGO_TLS_DISABLE_OCSP_ENDPOINT_CHECK", True),
         "mongo_present_env_keys": _present_mongo_related_env_keys(),
         "persistent_data_root": str(root),
     }
