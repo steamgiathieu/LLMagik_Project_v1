@@ -195,6 +195,28 @@ def _present_mongo_related_env_keys() -> list[str]:
     return keys
 
 
+def _mongo_uri_host_preview(uri: str) -> str | None:
+    value = (uri or "").strip()
+    if not value:
+        return None
+    try:
+        parsed = parse_uri(value)
+        nodelist = parsed.get("nodelist") or []
+        if nodelist:
+            host, port = nodelist[0]
+            return f"{host}:{port}"
+    except Exception:
+        pass
+
+    # Best-effort fallback parse.
+    try:
+        tail = value.split("@", 1)[-1]
+        host_part = tail.split("/", 1)[0].split("?", 1)[0]
+        return host_part or None
+    except Exception:
+        return None
+
+
 def _resolve_uri() -> str:
     global _last_mongo_uri_source
 
@@ -358,12 +380,14 @@ def mongo_enabled() -> bool:
 
 def get_persistence_status() -> dict[str, Any]:
     root = get_persistent_data_root()
-    uri_present = bool(_resolve_uri())
+    resolved_uri = _resolve_uri()
+    uri_present = bool(resolved_uri)
     connection_ok = mongo_enabled()
     db_name = _mongo_db.name if _mongo_db is not None else None
     return {
         "mongo_uri_present": uri_present,
         "mongo_uri_source": _last_mongo_uri_source,
+        "mongo_uri_host_preview": _mongo_uri_host_preview(resolved_uri) if uri_present else None,
         "mongo_connection_ok": connection_ok,
         "mongo_db_name": db_name,
         "mongo_init_error": _last_mongo_init_error,
